@@ -441,7 +441,7 @@ export function PaperMapView({
               <input
                 className={ui.input}
                 type="search"
-                placeholder="Search papers: words, author:, accept>=60 …"
+                placeholder="Search papers: words, author:, keyword: …"
                 maxLength={SEARCH_MAX_LENGTH}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}

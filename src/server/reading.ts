@@ -1,8 +1,6 @@
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { getDb, type Database } from '@/db';
 import { accounts, groupMembers, groupReadingList, listingReads, listings } from '@/db/schema';
-import { marketHeadline } from '@/lib/headline';
-import { listingViews } from './views';
 import { ApiError } from './api/errors';
 
 /** Read markers are global preferences, independent of membership and page-view counts. */
@@ -95,29 +93,21 @@ export async function readingList(groupId: string, viewerId: string | null, data
     .innerJoin(listings, eq(listings.id, groupReadingList.listingId))
     .where(eq(groupReadingList.groupId, groupId))
     .orderBy(desc(groupReadingList.createdAt), asc(listings.id));
-  const [statuses, views] = await Promise.all([
-    readingStatuses(
-      rows.map((r) => r.listing.id),
-      viewerId,
-      groupId,
-      database,
-    ),
-    listingViews(
-      rows.map((r) => r.listing),
-      database,
-    ),
-  ]);
+  const statuses = await readingStatuses(
+    rows.map((r) => r.listing.id),
+    viewerId,
+    groupId,
+    database,
+  );
+  // Safe for work edition: each paper's venue where the market edition showed its odds.
   return {
-    entries: rows.map(({ listing }, i) => {
-      const main = views[i].markets[0];
-      return {
-        listingId: listing.id,
-        slug: listing.slug,
-        title: listing.title,
-        headline: main ? marketHeadline({ ...main.market, outcomes: main.outcomes }) : null,
-        status: statuses[i],
-      };
-    }),
+    entries: rows.map(({ listing }, i) => ({
+      listingId: listing.id,
+      slug: listing.slug,
+      title: listing.title,
+      venue: listing.kind,
+      status: statuses[i],
+    })),
   };
 }
 

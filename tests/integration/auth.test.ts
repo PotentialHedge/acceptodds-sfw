@@ -410,30 +410,6 @@ describe('a session on /api/v1', () => {
 // trading is gated on institutional verification (§8)
 // ---------------------------------------------------------------------------
 
-describe('trading eligibility', () => {
-  it('refuses an unverified human with not_verified', async () => {
-    const t = await trader('unverified-token', ['read', 'trade'], { verified: false });
-    const res = await api('POST', `/markets/${fx.marketId}/orders`, { token: t.token, body: order(fx.outcomeIds[0]) });
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe('not_verified');
-    // Quoting is still open to them.
-    const q = await api('POST', `/markets/${fx.marketId}/quote`, {
-      token: t.token,
-      body: { outcomeId: fx.outcomeIds[0], sharesMicro: '1000000' },
-    });
-    expect(q.status).toBe(200);
-  });
-
-  it('exempts bots', async () => {
-    const bot = await trader('robo', ['read', 'trade'], { isBot: true });
-    const res = await api('POST', `/markets/${fx.marketId}/orders`, {
-      token: bot.token,
-      body: order(fx.outcomeIds[0]),
-    });
-    expect(res.status).toBe(201);
-  });
-});
-
 describe('the institution allowlist', () => {
   it('refuses sign-up from an unlisted domain before creating a user or sending mail', async () => {
     for (const email of ['me@gmail.com', 'me@notethz.ch', 'me@ethz.ch.evil.com', 'me@oxford.uk']) {

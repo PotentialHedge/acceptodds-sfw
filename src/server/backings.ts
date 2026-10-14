@@ -116,7 +116,8 @@ export async function withdrawBacking(
     .select({ marketId: comments.marketId })
     .from(comments)
     .where(eq(comments.id, input.commentId));
-  if (!comment) throw new ApiError(404, 'not_found', `no comment ${input.commentId}`);
+  // A paper's comment (safe for work edition) has no market and no backing.
+  if (!comment?.marketId) throw new ApiError(404, 'not_found', `no comment ${input.commentId}`);
   await database
     .delete(commentBackings)
     .where(and(eq(commentBackings.commentId, input.commentId), eq(commentBackings.accountId, input.accountId)));

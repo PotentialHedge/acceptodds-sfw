@@ -7,6 +7,12 @@ import { RelatedPapers } from '@/components/RelatedPapers';
 import { AddToReadingList, ReadEye } from '@/components/ReadingList';
 import { groupsOf } from '@/server/groups';
 import { FollowStar } from '@/components/FollowStar';
+import { PaperDiscussion } from '@/components/PaperDiscussion';
+import { Reactions } from '@/components/Reactions';
+import { PAPER_COMMENT_PAGE } from '@/lib/discussion-page';
+import { presentPaperComment } from '@/server/api/present';
+import { listPaperComments } from '@/server/discussion';
+import { reactionsOf } from '@/server/reactions';
 import { MathText } from '@/components/MathText';
 import { RememberVenue } from '@/components/RememberVenue';
 import { RunningHead } from '@/components/RunningHead';
@@ -87,7 +93,11 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
   const [myReadingGroups, alreadyListed] = viewer
     ? await Promise.all([groupsOf(viewer.account.id), readingGroupIdsForListing(viewer.account.id, listing.id)])
     : [[], new Set<string>()];
-  const [readStatus] = await readingStatuses([listing.id], viewer?.account.id ?? null);
+  const [[readStatus], reactions, discussion] = await Promise.all([
+    readingStatuses([listing.id], viewer?.account.id ?? null),
+    reactionsOf(listing.id, viewer?.account.id ?? null),
+    listPaperComments(listing.id, { limit: PAPER_COMMENT_PAGE, viewerAccountId: viewer?.account.id ?? null }),
+  ]);
   const main = markets[0];
   const venueOf = listing.kind ?? main?.market.kind ?? null;
   events.log('listing.read', { accountId: viewer?.account.id ?? null });
@@ -151,9 +161,25 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
             </>
           )}
         </div>
+        <Reactions listingId={listing.id} initial={reactions} signedIn={viewer !== null} />
       </TitleBlock>
 
       {relatedPapers}
+
+      <PaperDiscussion
+        listingId={listing.id}
+        initial={{
+          comments: discussion.comments.map(presentPaperComment),
+          replies: discussion.replies.map(presentPaperComment),
+          nextCursor: discussion.nextCursor,
+          total: discussion.total,
+          viewerAlias: discussion.viewerAlias,
+        }}
+        viewer={{
+          signedIn: viewer !== null,
+          canComment: viewer !== null && (viewer.account.isBot || viewer.account.verifiedAt !== null),
+        }}
+      />
 
       <Citations citations={citations} />
 

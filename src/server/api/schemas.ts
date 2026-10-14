@@ -1436,6 +1436,92 @@ export const CommentBackingRequest = z
 
 export const CommentId = Id.meta({ description: 'A comment id.' });
 
+// Safe for work edition: a paper's own discussion, with no stake or backing.
+
+export const PaperComment = z
+  .object({
+    id: Id,
+    parentId: Id.nullable().meta({ description: 'The comment this replies to; `null` on a top-level comment.' }),
+    body: z
+      .string()
+      .meta({ description: 'Raw text, as posted. Clients render it as Markdown (GFM) with $…$ / $$…$$ TeX math.' }),
+    createdAt: Timestamp,
+    replyCount: z.number().int().min(0).meta({
+      description:
+        'Direct replies to this comment. More than are loaded: fetch `GET /listings/{id}/comments/{commentId}/replies`.',
+    }),
+    mentions: z.array(z.string()).meta({
+      description:
+        'Aliases `@`-mentioned in `body` that belong to a commenter on this paper, in order of first mention.',
+    }),
+    author: z
+      .object({
+        alias: z.string().meta({
+          description:
+            "The author's pseudonym on this paper (shown as `User k3xm`): the same on all their comments on it, unrelated to their alias on any other paper.",
+          example: 'k3xm',
+        }),
+        bot: z.object({ handle: z.string(), displayName: z.string() }).nullable().meta({
+          description: 'Set when the author is a bot; always `null` for a person.',
+        }),
+        isYou: z.boolean().meta({ description: 'True when the authenticated caller wrote this comment.' }),
+      })
+      .meta({ description: "Pseudonymous: an alias per paper, never a person's handle or account id." }),
+  })
+  .meta({ id: 'PaperComment' });
+
+export const PaperCommentList = z
+  .object({
+    comments: z.array(PaperComment).meta({ description: 'Top-level comments, newest first.' }),
+    replies: z.array(PaperComment).meta({
+      description:
+        'A preview of the replies under them, flat, oldest first: the first 3 replies to each comment, 3 levels down. `parentId` makes the tree.',
+    }),
+    nextCursor: Cursor,
+    total: z.number().int().min(0).meta({ description: 'Every comment on the paper, replies included.' }),
+    viewerAlias: z.string().nullable().meta({
+      description: "The caller's alias on this paper; `null` until they first comment on it, or when anonymous.",
+    }),
+  })
+  .meta({ id: 'PaperCommentList' });
+
+export const PaperCommentRequest = z
+  .object({
+    body: z.string().trim().min(1).max(2000),
+    parentId: Id.optional().meta({ description: 'Reply to this comment, on the same paper, at any depth.' }),
+  })
+  .meta({ id: 'PaperCommentRequest' });
+
+export const PaperCommentReplies = z
+  .object({
+    replies: z.array(PaperComment).meta({
+      description:
+        'Up to `limit` direct replies, oldest first, then a preview of the replies under each (3 per comment, 2 levels down). Flat: `parentId` makes the tree.',
+    }),
+  })
+  .meta({ id: 'PaperCommentReplies' });
+
+export const Reaction = z
+  .object({
+    emoji: z.string().meta({ description: 'One emoji, without the U+FE0F presentation selector.', example: '🚀' }),
+    count: z.number().int().min(1).meta({ description: 'How many accounts reacted with it. Never who.' }),
+    mine: z.boolean().meta({ description: 'Whether the caller reacted with it; `false` when anonymous.' }),
+  })
+  .meta({ id: 'Reaction' });
+
+export const ReactionList = z
+  .object({
+    listingId: Id,
+    reactions: z.array(Reaction).meta({ description: 'Most used first.' }),
+  })
+  .meta({ id: 'ReactionList' });
+
+export const Emoji = z
+  .string()
+  .min(1)
+  .max(64)
+  .meta({ description: 'One emoji, URL-encoded.', example: '%F0%9F%9A%80' });
+
 // ---------------------------------------------------------------------------
 // onboarding
 // ---------------------------------------------------------------------------
@@ -1493,10 +1579,7 @@ export const ReadingList = z
         listingId: Id,
         slug: z.string(),
         title: z.string(),
-        headline: z.number().min(0).max(1).nullable().meta({
-          description:
-            'The main visible market’s headline probability; its result once settled, null without a visible market or when void.',
-        }),
+        venue: z.string().nullable().meta({ description: 'The paper’s venue (its opaque `kind`), if any.' }),
         status: ReadingStatus,
       }),
     ),

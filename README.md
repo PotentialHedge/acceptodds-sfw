@@ -35,6 +35,16 @@ git fetch upstream && git merge upstream/master
 - **Reading groups have their own pages**: `/groups`, linked from the navbar
   for everyone (your groups, or what a group is), and `/groups/<id>` (the
   market edition set them on the leaderboard).
+- **Emoji reactions and a paper's own discussion.** Under a paper's quick
+  actions, anonymous reactions (`listing_reactions`, `server/reactions.ts`):
+  a count per emoji, GitHub's eight suggested, any single emoji allowed.
+  Comments are back, on the listing itself (`comments.listing_id`,
+  `server/discussion.ts`), pseudonymous as before but with no stake or
+  backing; posting needs a confirmed institutional address. The market
+  edition's comments are not carried over. Both are new in `drizzle/0045`,
+  which only this fork has: merging an upstream migration numbered 0045 or
+  later needs renumbering.
+- **Market tests are gone**: only what this edition serves is tested.
 - **No agent onboarding or trading words**: the agent pages, the prompt and
   the "trade for you" key option are gone; API keys are read-only.
 - **Sign-up is the sign-in link** on `/signin` (`/welcome`, the bet-first

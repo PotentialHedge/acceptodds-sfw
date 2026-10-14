@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import type { z } from 'zod';
 import type * as S from '@/server/api/schemas';
-import { pct } from '@/lib/format';
 import { Confirm, NewGroupButton } from './Groups';
 import { ReadingGlassesIcon, TrashIcon } from './icons';
 import { MathText } from './MathText';
@@ -308,7 +307,7 @@ export function ReadingListTable({
           <thead>
             <tr>
               <th className={ui.th()}>Paper</th>
-              <th className={`${ui.th(true)} w-px whitespace-nowrap`}>P(accept)</th>
+              <th className={`${ui.th()} w-px whitespace-nowrap`}>Venue</th>
               {signedIn && (
                 <th className={`${ui.th(true)} w-px whitespace-nowrap`}>
                   Read<sup className={ui.mark}>a</sup>
@@ -325,10 +324,8 @@ export function ReadingListTable({
                     <MathText text={entry.title} />
                   </Link>
                 </td>
-                <td className={`${ui.td} ${ui.num} align-middle whitespace-nowrap`}>
-                  <div className="flex h-5 items-center justify-end">
-                    {entry.headline === null ? '—' : pct(entry.headline)}
-                  </div>
+                <td className={`${ui.td} align-middle font-sans text-[13px] whitespace-nowrap text-muted`}>
+                  {entry.venue ?? '—'}
                 </td>
                 {signedIn && (
                   <td className={`${ui.td} align-middle text-right whitespace-nowrap`}>

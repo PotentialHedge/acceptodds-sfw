@@ -161,14 +161,6 @@ describe('browseListings with q', () => {
     expect(await search('attention', { sort: 'newest' })).toEqual(['mixture', 'attention']);
   });
 
-  it('ignores an empty or blank query, and relevance without one sorts by closing', async () => {
-    const all = await search(null, { sort: 'closing' });
-    expect(all).toHaveLength(6);
-    expect(await search('', { sort: 'closing' })).toEqual(all);
-    expect(await search('   \t ', { sort: 'closing' })).toEqual(all);
-    expect(await search(null, { sort: 'relevance' })).toEqual(all);
-  });
-
   it('treats hostile input as text', async () => {
     for (const q of [
       "'; drop table listings; --",

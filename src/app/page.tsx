@@ -49,8 +49,8 @@ const abstract = (
   <>
     The safe for work edition of acceptodds: the submissions, without the markets. Search them, browse them on a map
     laid out by what they are about, follow the ones you care about, keep reading lists with your group, and get
-    recommendations from what you read. There are no odds, no bets and no reputation here. acceptodds is an open source
-    project, open to contributions, at{' '}
+    recommendations from what you read. There are no odds, no bets and no reputation here. acceptodds is not affiliated
+    with any organisation or institution. acceptodds is an open source project, open to contributions, at{' '}
     <a href={REPO_URL} className={ui.hyperref}>
       {REPO_URL.replace(/^https:\/\//, '')}
     </a>

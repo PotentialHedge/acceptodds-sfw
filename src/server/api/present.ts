@@ -4,6 +4,7 @@ import type { Principal } from '../auth';
 import type { Portfolio as PortfolioModel } from '../accounts';
 import type { Fill as FillModel, Quote as QuoteModel } from '../engine';
 import type { CommentView, ViewerStake } from '../comments';
+import type { PaperCommentView } from '../discussion';
 import type { FollowedListing } from '../follows';
 import type { GroupMember, GroupRole, GroupSummary } from '../groups';
 import type { PublicPositionView } from '../public-positions';
@@ -277,6 +278,18 @@ export function presentComment(c: CommentView): z.input<typeof S.Comment> {
       backers: c.backing.backers,
       yours: c.backing.yours.map((y) => ({ ...y, sharesMicro: y.sharesMicro.toString() })),
     },
+  };
+}
+
+export function presentPaperComment(c: PaperCommentView): z.input<typeof S.PaperComment> {
+  return {
+    id: c.id,
+    parentId: c.parentId,
+    body: c.body,
+    createdAt: toIso(c.createdAt),
+    replyCount: c.replyCount,
+    mentions: c.mentions,
+    author: c.author,
   };
 }
 

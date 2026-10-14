@@ -25,6 +25,10 @@ import * as settleRoute from '@/app/api/v1/markets/[id]/settle/route';
 import * as listingsRoute from '@/app/api/v1/listings/route';
 import * as listingRoute from '@/app/api/v1/listings/[id]/route';
 import * as listingFollowRoute from '@/app/api/v1/listings/[id]/follow/route';
+import * as listingCommentsRoute from '@/app/api/v1/listings/[id]/comments/route';
+import * as listingCommentRepliesRoute from '@/app/api/v1/listings/[id]/comments/[commentId]/replies/route';
+import * as listingReactionsRoute from '@/app/api/v1/listings/[id]/reactions/route';
+import * as listingReactionRoute from '@/app/api/v1/listings/[id]/reactions/[emoji]/route';
 import * as listingOrdersRoute from '@/app/api/v1/listings/[id]/orders/route';
 import * as listingMarketRoute from '@/app/api/v1/listings/[id]/market/route';
 import * as listingTextRoute from '@/app/api/v1/listings/[id]/text/route';
@@ -97,6 +101,10 @@ const ROUTES: [pattern: string, mod: Mod][] = [
   ['/groups/[id]/reading-list', groupReadingListRoute],
   ['/groups/[id]/reading-list/[listingId]', groupReadingItemRoute],
   ['/listings/[id]/follow', listingFollowRoute],
+  ['/listings/[id]/comments', listingCommentsRoute],
+  ['/listings/[id]/comments/[commentId]/replies', listingCommentRepliesRoute],
+  ['/listings/[id]/reactions', listingReactionsRoute],
+  ['/listings/[id]/reactions/[emoji]', listingReactionRoute],
   ['/listings/[id]/orders', listingOrdersRoute],
   ['/listings/[id]/market', listingMarketRoute],
   ['/listings/[id]/text', listingTextRoute],

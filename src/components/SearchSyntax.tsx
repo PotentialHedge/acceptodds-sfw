@@ -1,4 +1,7 @@
 import { FIELD_HELP } from '@/lib/query';
+
+/** Filters that read a market: still parsed, never offered here (safe for work edition). */
+const MARKET_FIELDS = new Set(['status', 'accept', 'volume', 'trades']);
 import { ui } from './ui';
 
 /**
@@ -23,7 +26,7 @@ export function SearchSyntax({ people = false }: { people?: boolean }) {
           </tr>
         </thead>
         <tbody>
-          {FIELD_HELP.map((f) => (
+          {FIELD_HELP.filter((f) => !MARKET_FIELDS.has(f.field)).map((f) => (
             <tr key={f.field}>
               <td className={`${ui.td} font-mono text-ink`}>{f.example}</td>
               <td className={ui.td}>{f.means}</td>
@@ -33,9 +36,8 @@ export function SearchSyntax({ people = false }: { people?: boolean }) {
         </tbody>
       </table>
       <p className="mt-1.5">
-        Numbers take <code>: = != &gt; &lt; &gt;= &lt;=</code>; text filters take <code>:</code> and <code>!=</code>.
-        Quote a value with spaces. For example:{' '}
-        <code>(venue:iclr OR venue:neurips) diffusion accept&gt;=60 -status:settled</code>
+        Filters take <code>:</code> and <code>!=</code>. Quote a value with spaces. For example:{' '}
+        <code>(venue:iclr OR venue:neurips) diffusion -keyword:survey</code>
       </p>
     </>
   );

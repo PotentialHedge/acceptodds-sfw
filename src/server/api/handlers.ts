@@ -18,6 +18,8 @@ import { buyOnListing, openListingMarket, openWithListing } from '../market-star
 import * as events from '../events';
 import { backComment, withdrawBacking } from '../backings';
 import { getComment, listComments, listMentions, listReplies, postComment } from '../comments';
+import { getPaperComment, listPaperComments, listPaperReplies, postPaperComment } from '../discussion';
+import { parseEmoji, reactionsOf, setReaction } from '../reactions';
 import { mailMentions } from '../mentions';
 import { follow, followedListings, setDigestOptIn, setMentionMailOptIn, unfollow } from '../follows';
 import {
@@ -102,6 +104,7 @@ import {
   presentTapeEntry,
   presentComment,
   presentComments,
+  presentPaperComment,
   presentToken,
 } from './present';
 import * as S from './schemas';
@@ -749,6 +752,95 @@ async function setFollow(req: Request, id: unknown, on: boolean) {
 
 export const putListingFollow = route((req, params) => setFollow(req, params.id, true));
 export const deleteListingFollow = route((req, params) => setFollow(req, params.id, false));
+
+// ---------------------------------------------------------------------------
+// a paper's discussion and reactions (safe for work edition)
+// ---------------------------------------------------------------------------
+
+/** A page of a paper's top-level comments, newest first, with a preview of the replies under them. Public. */
+export const getPaperComments = route(async (req, params) => {
+  const principal = await authenticate(req);
+  const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
+  const q = parseQuery(req, S.PaginationQuery);
+  const page = await listPaperComments(listing.id, { ...q, viewerAccountId: accountIdOf(principal) });
+  events.log('paper_comments.read', { accountId: accountIdOf(principal) });
+  return respond(
+    S.PaperCommentList,
+    {
+      comments: page.comments.map(presentPaperComment),
+      replies: page.replies.map(presentPaperComment),
+      nextCursor: page.nextCursor,
+      total: page.total,
+      viewerAlias: page.viewerAlias,
+    },
+    { principal },
+  );
+});
+
+/** A page of a paper comment's direct replies. Public. */
+export const getPaperCommentReplies = route(async (req, params) => {
+  const principal = await authenticate(req);
+  const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
+  const commentId = parseParam(params.commentId, S.CommentId, 'commentId');
+  const q = parseQuery(req, S.CommentRepliesQuery);
+  const replies = await listPaperReplies(listing.id, commentId, { ...q, viewerAccountId: accountIdOf(principal) });
+  events.log('paper_comments.read', { accountId: accountIdOf(principal) });
+  return respond(S.PaperCommentReplies, { replies: replies.map(presentPaperComment) }, { principal });
+});
+
+/**
+ * Comment on a paper. With no stake to stand behind a comment, what stands
+ * behind it is a confirmed institutional address (or a bot): the same
+ * account check as the market edition's trading gate, under the `read`
+ * scope, since keys here are read-only.
+ */
+export const postListingComment = route(async (req, params) => {
+  const principal = await requireAuth(req, 'read');
+  if (!principal.account.isBot && !principal.account.verifiedAt) {
+    throw new ApiError(403, 'not_verified', 'confirm an institutional email address before commenting');
+  }
+  const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
+  const body = await parseBody(req, S.PaperCommentRequest);
+  const created = await postPaperComment({
+    listingId: listing.id,
+    accountId: principal.account.id,
+    body: body.body,
+    parentId: body.parentId,
+  });
+  events.log('paper_comment.posted', { accountId: principal.account.id });
+  const view = await getPaperComment(listing.id, created.id, principal.account.id);
+  return respond(S.PaperComment, presentPaperComment(view!), { status: 201, principal });
+});
+
+/** A paper's reactions: a count per emoji, and the caller's own. Public. */
+export const getReactions = route(async (req, params) => {
+  const principal = await authenticate(req);
+  const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
+  const reactions = await reactionsOf(listing.id, accountIdOf(principal));
+  return respond(S.ReactionList, { listingId: listing.id, reactions }, { principal });
+});
+
+/** React to a paper with one emoji, or take it back. Idempotent; `read` scope, like a follow. */
+async function react(req: Request, params: Record<string, string | string[]>, on: boolean) {
+  const principal = await requireAuth(req, 'read');
+  const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
+  const raw = parseParam(params.emoji, S.Emoji, 'emoji');
+  // Whether the router has already decoded the segment or not, decode once more only if it still looks encoded.
+  let decoded = raw;
+  try {
+    decoded = /%[0-9a-f]{2}/i.test(raw) ? decodeURIComponent(raw) : raw;
+  } catch {
+    /* not percent-encoding after all */
+  }
+  const emoji = parseEmoji(decoded);
+  await setReaction(principal.account.id, listing.id, emoji, on);
+  events.log(on ? 'reaction.added' : 'reaction.removed', { accountId: principal.account.id });
+  const reactions = await reactionsOf(listing.id, principal.account.id);
+  return respond(S.ReactionList, { listingId: listing.id, reactions }, { principal });
+}
+
+export const putReaction = route((req, params) => react(req, params, true));
+export const deleteReaction = route((req, params) => react(req, params, false));
 
 // ---------------------------------------------------------------------------
 // groups

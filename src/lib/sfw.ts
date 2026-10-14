@@ -40,6 +40,7 @@ export const MARKET_API = [
   '/api/v1/leaderboard',
   '/api/v1/accounts/*/positions',
   '/api/v1/positions',
+  // Market comments and their backing; a paper's own discussion is under /listings/{id}/comments.
   '/api/v1/comments',
   '/api/v1/onboarding',
   '/api/v1/agent',

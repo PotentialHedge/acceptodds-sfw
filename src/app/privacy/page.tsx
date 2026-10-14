@@ -57,9 +57,9 @@ export default function PrivacyPage() {
             sign-in sessions (not the network address or browser they came from), and a hash of each API key you create;
           </li>
           <li>
-            the papers you follow, the reading groups you are in and what you add to them or mark as read: the site
-            itself. Trades, positions and comments made on the market edition of acceptodds are still held, and shown
-            nowhere here.
+            the papers you follow, the comments you post, the emoji reactions you add, the reading groups you are in and
+            what you add to them or mark as read: the site itself. Trades, positions and comments made on the market
+            edition of acceptodds are still held, and shown nowhere here.
           </li>
         </ul>
         <p>
@@ -80,6 +80,7 @@ export default function PrivacyPage() {
       </h2>
       <div className={prose}>
         <p>
+          Comments are shown under a random alias per paper, never your name, and reactions only as a count per emoji.
           Your display name, handle and institutions are shown to the members of reading groups you join, and with the
           group’s page to anyone who has its link. Your email address is never shown to anyone else.
         </p>

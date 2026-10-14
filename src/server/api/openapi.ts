@@ -838,6 +838,78 @@ export function buildRegistry(): OpenAPIRegistry {
     );
   }
 
+  // Safe for work edition: a paper's own discussion and reactions.
+  r.registerPath(
+    op({
+      method: 'get',
+      path: '/listings/{id}/comments',
+      tags: ['listings'],
+      summary: 'A paper’s discussion',
+      description:
+        'Top-level comments, newest first, with a preview of the replies under them in `replies` (the rest from `GET /listings/{id}/comments/{commentId}/replies`). Pseudonymous: an alias per paper. Bodies are raw Markdown with TeX math.',
+      request: { params: listingIdParam, query: S.PaginationQuery },
+      ok: { status: 200, schema: S.PaperCommentList, description: 'A page of comments.' },
+      errors: { 404: 'not_found' },
+    }),
+  );
+  r.registerPath(
+    op({
+      method: 'post',
+      path: '/listings/{id}/comments',
+      tags: ['listings'],
+      summary: 'Comment on a paper',
+      description:
+        'A top-level comment, or with `parentId` a reply. Needs the `read` scope and a confirmed institutional address (or a bot account).',
+      scope: 'read',
+      request: { params: listingIdParam, body: { content: { 'application/json': { schema: S.PaperCommentRequest } } } },
+      ok: { status: 201, schema: S.PaperComment, description: 'The comment, as the list shows it.' },
+      errors: { 403: 'not_verified', 404: 'not_found' },
+    }),
+  );
+  r.registerPath(
+    op({
+      method: 'get',
+      path: '/listings/{id}/comments/{commentId}/replies',
+      tags: ['listings'],
+      summary: 'Replies to a paper’s comment',
+      description: 'Direct replies, oldest first, after `after`, each with a preview of the replies under it.',
+      request: {
+        params: z.object({ id: S.ListingRef, commentId: S.CommentId }),
+        query: S.CommentRepliesQuery,
+      },
+      ok: { status: 200, schema: S.PaperCommentReplies, description: 'A page of replies.' },
+      errors: { 404: 'not_found' },
+    }),
+  );
+  r.registerPath(
+    op({
+      method: 'get',
+      path: '/listings/{id}/reactions',
+      tags: ['listings'],
+      summary: 'A paper’s reactions',
+      description: 'A count per emoji, most used first, and whether the caller used it. Never who.',
+      request: { params: listingIdParam },
+      ok: { status: 200, schema: S.ReactionList, description: 'The reactions.' },
+      errors: { 404: 'not_found' },
+    }),
+  );
+  for (const method of ['put', 'delete'] as const) {
+    r.registerPath(
+      op({
+        method,
+        path: '/listings/{id}/reactions/{emoji}',
+        tags: ['listings'],
+        summary: method === 'put' ? 'React to a paper' : 'Take a reaction back',
+        description:
+          'One emoji, URL-encoded in the path. Idempotent. Anonymous to everyone else; needs only the `read` scope. At most 20 different emoji per account on one paper (`409 too_many_reactions`).',
+        scope: 'read',
+        request: { params: z.object({ id: S.ListingRef, emoji: S.Emoji }) },
+        ok: { status: 200, schema: S.ReactionList, description: 'The paper’s reactions now.' },
+        errors: { 400: 'validation_error: not a single emoji', 404: 'not_found', 409: 'too_many_reactions' },
+      }),
+    );
+  }
+
   r.registerPath(
     op({
       method: 'post',

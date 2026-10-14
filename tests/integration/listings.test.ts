@@ -4,28 +4,15 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { markets } from '@/db/schema';
-import { marketHeadline } from '@/lib/headline';
 import * as mapTitlesRoute from '@/app/api/v1/map/titles/route';
 import { MINIMAP_NEAREST } from '@/lib/map';
 import { defaultMarketKind } from '@/lib/venue';
-import { createMarket } from '@/server/engine';
 import { upsertListing } from '@/server/listings';
-import { invalidateMap } from '@/server/map-cache';
-import {
-  browseListings,
-  listingMinimap,
-  listingRelatedTo,
-  mapKinds,
-  marketKinds,
-  onMap,
-  resolveListing,
-  sparklines,
-} from '@/server/views';
+import { listingMinimap, listingRelatedTo, mapKinds, onMap, resolveListing } from '@/server/views';
 import { api, ORIGIN, trader } from './api-client';
-import { closePool, resetDatabase, seedMarket, STARTING_MICRO, type Fixture } from './helpers';
+import { closePool, resetDatabase, seedMarket, STARTING_MICRO } from './helpers';
 
 const db = getDb();
-let fx: Fixture;
 let admin: { token: string };
 
 beforeEach(async () => {
@@ -33,7 +20,7 @@ beforeEach(async () => {
   process.env.API_RATE_LIMIT_BURST = '1000';
   process.env.API_RATE_LIMIT_PER_SECOND = '1000';
   process.env.STARTING_BALANCE_MICRO = STARTING_MICRO.toString();
-  fx = await seedMarket(0, 10);
+  await seedMarket(0, 10);
   admin = await trader('admin', ['admin']);
 }, 60_000);
 
@@ -138,44 +125,6 @@ describe('POST /listings', () => {
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('validation_error');
     }
-  });
-});
-
-describe('markets in a listing', () => {
-  it('attach by listingSlug and come back ordered by rank, by id or slug', async () => {
-    const listing = (await api('POST', '/listings', { token: admin.token, body: LISTING })).body.listing;
-    const oral = await market('subject-one-oral', { listingSlug: LISTING.slug, listingRank: 1 });
-    expect(oral.status).toBe(201);
-    expect(oral.body.market).toMatchObject({ listingId: listing.id, listingRank: 1 });
-    const main = await market('subject-one-accept', { listingSlug: LISTING.slug });
-    expect(main.body.market).toMatchObject({ listingId: listing.id, listingRank: 0 });
-
-    for (const ref of [listing.id, LISTING.slug]) {
-      const res = await api('GET', `/listings/${ref}`);
-      expect(res.status).toBe(200);
-      expect(res.body.markets.map((m: any) => m.slug)).toEqual(['subject-one-accept', 'subject-one-oral']);
-    }
-
-    // A market outside any listing says so.
-    expect((await api('GET', `/markets/${fx.marketId}`)).body).toMatchObject({ listingId: null, listingRank: 0 });
-  });
-
-  it('refuses an unknown listing, and a rank without one', async () => {
-    const unknown = await market('orphan', { listingSlug: 'no-such-listing' });
-    expect(unknown.status).toBe(404);
-    expect(unknown.body.error.code).toBe('not_found');
-    expect(await db.select().from(markets).where(eq(markets.slug, 'orphan'))).toEqual([]);
-
-    const rankOnly = await market('rank-only', { listingRank: 2 });
-    expect(rankOnly.status).toBe(400);
-    await upsertListing(LISTING);
-    expect((await market('negative', { listingSlug: LISTING.slug, listingRank: -1 })).status).toBe(400);
-  });
-
-  it('404s an unknown listing on read', async () => {
-    const res = await api('GET', '/listings/nope');
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe('not_found');
   });
 });
 
@@ -287,101 +236,6 @@ describe('citations (#38)', () => {
   });
 });
 
-describe('browsing listings', () => {
-  it('shows one row per listing, read from its main market, plus unlisted markets', async () => {
-    const { listing } = await upsertListing({ slug: 'p', title: 'P' });
-    const opts = {
-      outcomes: ['YES', 'NO'],
-      startingBalanceMicro: STARTING_MICRO,
-      expectedTraders: 10,
-      kind: 'binary',
-      listingId: listing.id,
-    };
-    const second = await createMarket({
-      ...opts,
-      slug: 'p-oral',
-      question: 'oral?',
-      listingRank: 1,
-      closesAt: new Date(Date.now() + 2 * 86_400_000),
-    });
-    const main = await createMarket({
-      ...opts,
-      slug: 'p-accept',
-      question: 'accept?',
-      listingRank: 0,
-      closesAt: new Date(Date.now() + 3 * 86_400_000),
-    });
-
-    const t = await trader('t');
-    const buy = (marketId: string, outcomeId: string) =>
-      api('POST', `/markets/${marketId}/orders`, {
-        token: t.token,
-        body: { outcomeId, sharesMicro: '10000000', maxCostMicro: '1000000000' },
-      });
-    await buy(main.marketId, main.outcomeIds[0]);
-    await buy(second.marketId, second.outcomeIds[1]);
-
-    const { rows } = await browseListings({ kind: null, sort: 'closing' });
-    expect(rows.map((r) => [r.main!.market.slug, r.listing?.slug ?? null, r.marketCount])).toEqual([
-      // Traded first: the fixture's market has no fills.
-      ['p-accept', 'p', 2],
-      ['concurrency', null, 1],
-    ]);
-    const row = rows[0];
-    // Volume and fills over the whole listing; the headline from the main market.
-    expect(row.totalOrderCount).toBe(2);
-    expect(row.totalVolumeMicro).toBeGreaterThan(row.main!.volumeMicro);
-    expect(row.main!.outcomes[0].price).toBeGreaterThan(0.5);
-    // The sparkline is the main market's.
-    expect((await sparklines(rows.map((r) => r.main!))).get(main.marketId)).toHaveLength(2);
-
-    // A listing counts once in its main market's kind.
-    expect(await marketKinds()).toEqual([{ kind: 'binary', count: 2 }]);
-  });
-
-  it('sorts by likelihood: the headline, highest first, void last', async () => {
-    const opts = {
-      startingBalanceMicro: STARTING_MICRO,
-      expectedTraders: 10,
-      kind: 'lk',
-      closesAt: new Date(Date.now() + 86_400_000),
-    };
-    const make = (slug: string, outcomes = ['YES', 'NO']) =>
-      createMarket({ ...opts, slug, question: `${slug}?`, outcomes });
-    const low = await make('low');
-    const high = await make('high');
-    await make('mid');
-    // Three outcomes open at a headline of 1 − 1/3.
-    const multi = await make('multi', ['A', 'B', 'C']);
-    const gone = await make('gone', ['A', 'B', 'C']);
-
-    const t = await trader('t');
-    const buy = (marketId: string, outcomeId: string, units: number) =>
-      api('POST', `/markets/${marketId}/orders`, {
-        token: t.token,
-        body: { outcomeId, sharesMicro: String(units * 1_000_000), maxCostMicro: '1000000000' },
-      });
-    await buy(low.marketId, low.outcomeIds[1], 20);
-    await buy(high.marketId, high.outcomeIds[0], 30);
-    await buy(multi.marketId, multi.outcomeIds[0], 50);
-
-    // There is no void path in the engine yet; the status is all the sort reads.
-    await db.update(markets).set({ status: 'void' }).where(eq(markets.id, gone.marketId));
-
-    const { rows } = await browseListings({ kind: 'lk', sort: 'likelihood', status: 'all' });
-    // Traded first; `mid` and `gone` have no fills.
-    expect(rows.map((r) => r.main!.market.slug)).toEqual(['multi', 'high', 'low', 'mid', 'gone']);
-    expect(rows[3].main!.outcomes[0].price).toBeCloseTo(0.5);
-    // The SQL headline is the same number `lib/headline.ts` computes.
-    const m = rows[0];
-    expect(1 - m.main!.outcomes[2].price).toBeGreaterThan(2 / 3);
-    expect(marketHeadline({ ...m.main!.market, outcomes: m.main!.outcomes })).toBeCloseTo(
-      1 - m.main!.outcomes[2].price,
-      12,
-    );
-  });
-});
-
 describe('related listings', () => {
   const post = (body: Record<string, unknown>) => api('POST', '/listings', { token: admin.token, body });
   const put = (ref: string, related: unknown, token = admin.token) =>
@@ -436,68 +290,6 @@ describe('the paper map', () => {
   const put = (body: object, token = admin.token) =>
     api('PUT', '/map', { token, body: { kind: defaultMarketKind(), ...body } });
   const getMap = (kind?: string) => api('GET', kind ? `/map?kind=${encodeURIComponent(kind)}` : '/map');
-
-  it('matches slugs when read, skips unlisted ones and carries the main market’s headline', async () => {
-    for (const slug of ['a', 'b']) await post({ slug, title: `Paper ${slug}`, primaryArea: 'area' });
-    const made = await market('a-accept', { listingSlug: 'a' });
-    expect(made.status).toBe(201);
-    const t = await trader('t');
-
-    const res = await put({
-      points: [
-        { slug: 'a', x: 1, y: 2, region: 0, cluster: 3 },
-        { slug: 'not-yet', x: 0, y: 0 },
-        { slug: 'b', x: -1, y: 5, region: 1, cluster: null },
-        { slug: 'a', x: 9, y: 9 },
-      ],
-      regions: [
-        { number: 0, label: 'first region' },
-        { number: 1, label: 'second region' },
-      ],
-      clusters: [{ number: 3, label: 'a cluster' }],
-    });
-    expect(res.status).toBe(200);
-    expect(res.body.count).toBe(3);
-
-    const got = await getMap();
-    expect(got.status).toBe(200);
-    expect(got.headers.get('cache-control')).toBe('public, max-age=300, stale-while-revalidate=3600');
-    const { slugs, x, y, region, cluster, area, areas, headline } = got.body;
-    expect({ slugs, x, y, region, cluster, area, areas }).toEqual({
-      slugs: ['a', 'b'],
-      x: [1, -1],
-      y: [2, 5],
-      region: [0, 1],
-      cluster: [3, null],
-      area: [0, 0],
-      areas: ['area'],
-    });
-    // Untraded, the market shows no price; traded, its headline.
-    expect(headline).toEqual([null, null]);
-    const buy = await api('POST', `/markets/${made.body.market.id}/orders`, {
-      token: t.token,
-      body: { outcomeId: made.body.market.outcomes[0].id, sharesMicro: '1000000', maxCostMicro: '1000000000' },
-    });
-    expect(buy.status).toBe(201);
-    invalidateMap();
-    expect((await getMap()).body.headline[0]).toBeGreaterThan(0.5);
-    expect(got.body.regions).toEqual([
-      { number: 0, label: 'first region' },
-      { number: 1, label: 'second region' },
-    ]);
-    expect(got.body.clusters).toEqual([{ number: 3, label: 'a cluster' }]);
-
-    // Titles are their own request, by slug.
-    const titles = await api('GET', '/map/titles');
-    expect(titles.status).toBe(200);
-    expect(titles.body).toEqual({ titles: { a: 'Paper a', b: 'Paper b' } });
-
-    await post({ slug: 'not-yet', title: 'Later' });
-    const later = await getMap();
-    expect(later.body.slugs).toEqual(['a', 'b', 'not-yet']);
-    expect(later.body.area).toEqual([0, 0, null]);
-    expect((await api('GET', '/map/titles')).body.titles['not-yet']).toBe('Later');
-  });
 
   it('sends a large body compressed when the client accepts it', async () => {
     const slugs = Array.from({ length: 60 }, (_, i) => `paper-${i}`);

@@ -700,9 +700,10 @@ export const comments = pgTable(
   'comments',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    marketId: uuid('market_id')
-      .notNull()
-      .references(() => markets.id, { onDelete: 'cascade' }),
+    // The market edition's discussions are a market's; the safe for work edition's are a listing's
+    // (`server/discussion.ts`). Exactly one is set.
+    marketId: uuid('market_id').references(() => markets.id, { onDelete: 'cascade' }),
+    listingId: uuid('listing_id').references(() => listings.id, { onDelete: 'cascade' }),
     accountId: uuid('account_id')
       .notNull()
       .references(() => accounts.id, { onDelete: 'cascade' }),
@@ -714,7 +715,9 @@ export const comments = pgTable(
   },
   (t) => [
     index('comments_market_created_idx').on(t.marketId, t.createdAt),
+    index('comments_listing_created_idx').on(t.listingId, t.createdAt, t.id),
     index('comments_parent_created_idx').on(t.parentId, t.createdAt, t.id),
+    check('comments_one_scope', sql`(${t.marketId} is null) <> (${t.listingId} is null)`),
   ],
 );
 
@@ -906,6 +909,30 @@ export const listingFollows = pgTable(
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.accountId, t.listingId] }), index('listing_follows_listing_idx').on(t.listingId)],
+);
+
+/**
+ * Emoji reactions to a listing (safe for work edition, `server/reactions.ts`,
+ * the only writer). Anonymous: only counts per emoji are ever shown, and the
+ * viewer's own. One row per account, listing and emoji; an account may react
+ * with several emoji, at most `MAX_REACTIONS_PER_ACCOUNT` on one listing.
+ */
+export const listingReactions = pgTable(
+  'listing_reactions',
+  {
+    listingId: uuid('listing_id')
+      .notNull()
+      .references(() => listings.id, { onDelete: 'cascade' }),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    emoji: text('emoji').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.listingId, t.accountId, t.emoji] }),
+    check('listing_reactions_emoji_length', sql`char_length(${t.emoji}) between 1 and 16`),
+  ],
 );
 
 /**
