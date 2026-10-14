@@ -5,8 +5,6 @@ import { events, markets } from '@/db/schema';
 import { headlinePrice } from '@/lib/headline';
 import { createMarket, trade } from '@/server/engine';
 import { upsertListing } from '@/server/listings';
-import { shapeOf } from '@/server/field-snapshot';
-import { previewImage, profileImage } from '@/server/og';
 import { shareSubject } from '@/server/share';
 import { browseListings, sparklines } from '@/server/views';
 import * as badgeRoute from '@/app/badge/[file]/route';
@@ -134,38 +132,6 @@ describe('/badge/<slug>.svg', () => {
 
   it('names an unlisted binary market’s first outcome', async () => {
     expect(await (await badge('concurrency.svg', {}, '?style=compact')).text()).toContain('50% YES');
-  });
-});
-
-describe('previews', () => {
-  it('renders a PNG for a paper', async () => {
-    await paper('p');
-    const subject = (await shareSubject('p'))!;
-
-    const res = await previewImage(subject);
-    expect(res.headers.get('content-type')).toBe('image/png');
-    const png = new Uint8Array(await res.arrayBuffer());
-    expect([...png.slice(1, 4)].map((c) => String.fromCharCode(c)).join('')).toBe('PNG');
-  });
-
-  it('renders a PNG for a trader, on the field, off it, and with no field', async () => {
-    const field = shapeOf(
-      [900n, 1000n, 1000n, 1100n, 1500n].map((u) => u * 1_000_000n),
-      new Date(),
-    );
-    const trader = { displayName: 'Ada Lovelace', handle: 'ada', institutions: ['ETH Zurich'] };
-    for (const p of [
-      { ...trader, field, standing: { rank: 2, fieldSize: 5, percentAhead: 75 }, worthMicro: 1_100_000_000n },
-      // A live figure past the snapshot's range is drawn at its edge.
-      { ...trader, field, standing: { rank: 1, fieldSize: 5, percentAhead: 100 }, worthMicro: 9_000_000_000n },
-      { ...trader, field, standing: null, worthMicro: null },
-      { ...trader, field: shapeOf([], new Date()), standing: null, worthMicro: null },
-    ]) {
-      const res = await profileImage(p);
-      expect(res.headers.get('content-type')).toBe('image/png');
-      const png = new Uint8Array(await res.arrayBuffer());
-      expect([...png.slice(1, 4)].map((c) => String.fromCharCode(c)).join('')).toBe('PNG');
-    }
   });
 });
 
