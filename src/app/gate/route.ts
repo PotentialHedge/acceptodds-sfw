@@ -97,12 +97,12 @@ const PAGE = `<!doctype html>
         margin: 8px 0 0;
       }
       .enter {
-        padding: 10px 20px;
+        padding: 6px 14px;
         border: 1px solid #b31b1b;
         background: #b31b1b;
         color: #fff;
         font: inherit;
-        font-size: 17px;
+        font-size: 14px;
         cursor: pointer;
       }
       .enter:hover {
