@@ -3,8 +3,6 @@ import { eq } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { groupReadingList, listingReads, listings } from '@/db/schema';
 import { readingGroupIdsForListing } from '@/server/reading';
-import { createMarket, settle } from '@/server/engine';
-import { STARTING_MICRO } from './helpers';
 import { upsertListing } from '@/server/listings';
 import { api, signUp, trader } from './api-client';
 import { closePool, resetDatabase, seedMarket } from './helpers';
@@ -28,45 +26,13 @@ async function fixture() {
 }
 
 describe('reading lists', () => {
-  it('includes the main visible market’s headline probability and settled result', async () => {
-    const { alice, group, listing } = await fixture();
-    await api('PUT', `/groups/${group.id}/reading-list/${listing.id}`, { token: alice.token });
-    const headline = async () => (await api('GET', `/groups/${group.id}/reading-list`)).body.entries[0].headline;
-    expect(await headline()).toBeNull();
-    const options = {
-      listingId: listing.id,
-      startingBalanceMicro: STARTING_MICRO,
-      expectedTraders: 10,
-      closesAt: new Date(Date.now() + 86_400_000),
-    };
-    await createMarket({
-      ...options,
-      slug: 'hidden',
-      question: 'Hidden?',
-      outcomes: ['YES', 'NO'],
-      status: 'draft',
-      listingRank: -1,
-    });
-    expect(await headline()).toBeNull();
-    await createMarket({
-      ...options,
-      slug: 'secondary',
-      question: 'Secondary?',
-      outcomes: ['YES', 'NO'],
-      openingPrices: [0.9, 0.1],
-      listingRank: 1,
-    });
-    const main = await createMarket({
-      ...options,
-      slug: 'acceptance',
-      question: 'Decision?',
-      outcomes: ['oral', 'spotlight', 'poster', 'reject'],
-      openingPrices: [0.1, 0.2, 0.3, 0.4],
-      listingRank: 0,
-    });
-    expect(await headline()).toBeCloseTo(0.6);
-    await settle(main.marketId, main.outcomeIds[0]);
-    expect(await headline()).toBe(1);
+  it('gives each paper’s venue, never a price', async () => {
+    const { alice, group } = await fixture();
+    const { listing: venued } = await upsertListing({ slug: 'venued', title: 'Venued', kind: 'ICLR 2027' });
+    await api('PUT', `/groups/${group.id}/reading-list/${venued.id}`, { token: alice.token });
+    const [entry] = (await api('GET', `/groups/${group.id}/reading-list`)).body.entries;
+    expect(entry.venue).toBe('ICLR 2027');
+    expect(entry).not.toHaveProperty('headline');
   });
 
   it('lets any member add and remove, idempotently; excludes outsiders and institutions', async () => {

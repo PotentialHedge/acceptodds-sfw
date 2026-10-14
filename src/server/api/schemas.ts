@@ -1464,10 +1464,7 @@ export const ReadingList = z
         listingId: Id,
         slug: z.string(),
         title: z.string(),
-        headline: z.number().min(0).max(1).nullable().meta({
-          description:
-            'The main visible market’s headline probability; its result once settled, null without a visible market or when void.',
-        }),
+        venue: z.string().nullable().meta({ description: 'The paper’s venue (its opaque `kind`), if any.' }),
         status: ReadingStatus,
       }),
     ),
