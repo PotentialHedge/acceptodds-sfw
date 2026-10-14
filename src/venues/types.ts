@@ -31,32 +31,6 @@ export interface Venue {
   /** The listings' `kind`, as `../research` sends it. */
   kind: string;
 
-  // --- the home page and its link preview --------------------------------
-
-  /** The home page's title after the wordmark, e.g. "Which papers will get accepted at ICLR 2027?". */
-  homeTitle: string;
-  /** The home link preview's title, short enough for the card: "Which papers will get accepted?". */
-  cardTitle: string;
-  /** One line on what the site is for this venue: "A prediction market on peer review". No full stop. */
-  lede: string;
-  /** What each listing's market asks, in the home abstract: "Each paper has a market on …". */
-  marketOn: string;
-  /** When markets settle, in the home abstract: "every market settles when …". */
-  settlesWhen: string;
-  /** Who the site has no connection to, named in the home abstract. */
-  unaffiliated: string[];
-  /**
-   * The home abstract, written whole, in place of the one built from `lede`,
-   * `marketOn`, `settlesWhen` and `unaffiliated` (which the agent prompt and
-   * `/about` still read). `{balance}` becomes the starting balance, e.g.
-   * "1,000 $rep". The page adds the open-source sentence and its footnote.
-   */
-  abstract?: string;
-  /** The card's example question around the hidden title: "Will ▒▒ be accepted @ ICLR 2027?". */
-  cardQuestion: { predicate: string; suffix: string };
-  /** The handwritten note pointing at the hidden title ("your paper?"); none when left out. */
-  cardNote?: string;
-
   // --- a listing's page and its shares ------------------------------------
 
   /** The paper page's running head: "Under review as a conference paper at ICLR 2027". */

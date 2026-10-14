@@ -67,7 +67,7 @@ describe('sign-in links', () => {
     expect(location).toBe(`${LANDING}?new=1`);
 
     const me = await api('GET', '/me', { cookie });
-    expect(me.body).toMatchObject({ canTrade: true, wallets: [] });
+    expect(me.body).not.toHaveProperty('wallets');
     const u = await userRow('ada@example.org');
     expect(await missingFromUser(u.id)).toEqual({ name: true, password: true });
 

@@ -130,25 +130,20 @@ describe('GET /me/follows', () => {
     expect(r.status).toBe(200);
     expect(r.body.follows.map((f: any) => f.listing.slug)).toEqual(['two', 'one']);
 
-    const [two, one] = r.body.follows;
-    expect(two.headline.marketId).toBe(p2.marketId);
-    expect(two.headline.outcomeLabel).toBe('YES');
-    expect(two.headline.price24hAgo).toBeCloseTo(0.5, 12);
-    expect(two.headline.price).toBeGreaterThan(0.58);
-    expect(one.headline.price24hAgo).toBeCloseTo(one.headline.price, 12);
-    expect(one.headline.price).toBeGreaterThan(0.5);
+    // The safe for work edition sends no prices.
+    for (const f of r.body.follows) expect(f).not.toHaveProperty('headline');
 
     expect((await api('GET', '/me/follows')).status).toBe(401);
     const tradeOnly = await trader('t', ['trade']);
     expect((await api('GET', '/me/follows', { token: tradeOnly.token })).status).toBe(403);
   });
 
-  it('gives a null headline for a listing with no visible market', async () => {
+  it('lists a listing with no market', async () => {
     const { listing } = await upsertListing({ slug: 'empty', title: 'Empty' });
     const t = await trader('alice', ['read']);
     await follow(t.id, listing.id);
     const r = await api('GET', '/me/follows', { token: t.token });
-    expect(r.body.follows[0]).toMatchObject({ listing: { slug: 'empty', markets: [] }, headline: null });
+    expect(r.body.follows[0]).toMatchObject({ listing: { slug: 'empty' } });
   });
 });
 

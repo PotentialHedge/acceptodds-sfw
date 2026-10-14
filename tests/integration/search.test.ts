@@ -246,7 +246,6 @@ describe('GET /listings?q= and /markets?q=', () => {
     const listings = await api('GET', '/listings?q=vaswani');
     expect(listings.status).toBe(200);
     expect(listings.body.listings.map((l: any) => l.slug)).toEqual(['attention']);
-    expect(listings.body.listings[0].markets).toHaveLength(2);
     expect(listings.body.nextCursor).toBeNull();
 
     // A market matches on its listing's text too.
@@ -300,7 +299,7 @@ describe('GET /listings?q= and /markets?q=', () => {
 
   it('documents q in the OpenAPI document', async () => {
     const doc = (await api('GET', '/openapi.json')).body;
-    for (const path of ['/markets', '/listings']) {
+    for (const path of ['/listings']) {
       expect(doc.paths[path].get.parameters.map((p: any) => p.name)).toContain('q');
     }
   });

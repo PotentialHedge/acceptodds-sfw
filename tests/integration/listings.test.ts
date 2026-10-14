@@ -8,6 +8,7 @@ import { marketHeadline } from '@/lib/headline';
 import * as mapTitlesRoute from '@/app/api/v1/map/titles/route';
 import { MINIMAP_NEAREST } from '@/lib/map';
 import { defaultMarketKind } from '@/lib/venue';
+import * as S from '@/server/api/schemas';
 import { createMarket } from '@/server/engine';
 import { upsertListing } from '@/server/listings';
 import { invalidateMap } from '@/server/map-cache';
@@ -76,7 +77,8 @@ describe('POST /listings', () => {
   it('creates, then replaces by slug', async () => {
     const created = await api('POST', '/listings', { token: admin.token, body: LISTING });
     expect(created.status).toBe(201);
-    expect(created.body).toMatchObject({ created: true, listing: { ...LISTING, markets: [] } });
+    expect(created.body).toMatchObject({ created: true, listing: LISTING });
+    expect(created.body.listing).not.toHaveProperty('markets');
 
     const replaced = await api('POST', '/listings', {
       token: admin.token,
@@ -103,7 +105,7 @@ describe('POST /listings', () => {
     const body = { ...LISTING, slug: 'oai-result', kind: 'OpenAI Math' };
     const created = await api('POST', '/listings', { token: admin.token, body });
     expect(created.status).toBe(201);
-    const [opened] = created.body.listing.markets;
+    const opened = (await api('GET', '/markets/oai-result-decision')).body;
     expect(opened).toMatchObject({ slug: 'oai-result-decision', kind: 'OpenAI Math', status: 'open', orderCount: 0 });
     expect(opened.outcomes.map((o: any) => [o.label, o.price])).toEqual([
       ['Verified', expect.closeTo(0.5, 9)],
@@ -115,7 +117,7 @@ describe('POST /listings', () => {
     // Posted again: the same market, no second one.
     const again = await api('POST', '/listings', { token: admin.token, body });
     expect(again.status).toBe(200);
-    expect(again.body.listing.markets.map((m: any) => m.id)).toEqual([opened.id]);
+    expect(await db.select().from(markets).where(eq(markets.listingId, created.body.listing.id))).toHaveLength(1);
   });
 
   it('needs the admin scope', async () => {
@@ -231,13 +233,13 @@ describe('citations (#38)', () => {
         slug: null,
         listing: null,
       },
-      { title: 'Cited paper', slug: 'cited', listing: { slug: 'cited', market: { slug: 'cited-accept' } } },
+      { title: 'Cited paper', slug: 'cited', listing: { slug: 'cited' } },
       { title: 'Not listed yet', slug: 'later', listing: null },
     ]);
 
-    // Listed afterwards, it links up by itself, with no market yet.
+    // Listed afterwards, it links up by itself.
     await post({ slug: 'later', title: 'Later paper' });
-    expect((await citations('citing')).body.references[2].listing).toMatchObject({ slug: 'later', market: null });
+    expect((await citations('citing')).body.references[2].listing).toMatchObject({ slug: 'later' });
   });
 
   it('lists who cites a listing once each, never itself', async () => {
@@ -404,8 +406,7 @@ describe('related listings', () => {
 
     const got = await related('a');
     expect(got.body.related.map((r: any) => r.slug)).toEqual(['c', 'b']);
-    expect(got.body.related[0].market).not.toBeNull();
-    expect(got.body.related[1].market).toBeNull();
+    expect(got.body.related[0]).not.toHaveProperty('market');
 
     await post({ slug: 'not-yet', title: 'Later' });
     expect((await related('a')).body.related.map((r: any) => r.slug)).toEqual(['c', 'not-yet', 'b']);
@@ -642,7 +643,7 @@ describe('a paper’s minimap', () => {
     const got = await api('GET', '/listings/c/minimap');
     expect(got.status).toBe(200);
     expect(got.headers.get('cache-control')).toMatch(/^public, /);
-    expect(got.body).toEqual(JSON.parse(JSON.stringify(await minimap('c'))));
+    expect(got.body).toEqual(JSON.parse(JSON.stringify(S.Minimap.parse(await minimap('c')))));
     expect(got.body.related.map((i: number) => got.body.points[i].slug)).toEqual(['d']);
     await putRelated('c', ['e']);
     const after = await api('GET', '/listings/c/minimap');

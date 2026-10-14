@@ -5,7 +5,7 @@ import { PaperMapView } from '@/components/map/PaperMapView';
 import { RememberVenue, VenueInUrl } from '@/components/RememberVenue';
 import { viewerFromHeaders } from '@/server/auth';
 import { currentVenue } from '@/server/current-venue';
-import { siteName, venuePreviewImages } from '@/server/share';
+import { siteName } from '@/server/share';
 import { listingVenue, mapKinds, resolveListing } from '@/server/views';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -30,13 +30,12 @@ export async function generateMetadata({ searchParams }: { searchParams: SearchP
   const title = 'Map of papers | acceptodds';
   const description = `Every ${kind} paper on one map, placed near the papers most like it, coloured by topic.`;
   const url = `/map?${new URLSearchParams({ kind })}`;
-  const images = venuePreviewImages(kind);
   return {
     title,
     description,
     alternates: { canonical: url },
-    openGraph: { title, description, url, type: 'website', siteName: siteName(), images },
-    twitter: { card: 'summary_large_image', title, description, images },
+    openGraph: { title, description, url, type: 'website', siteName: siteName() },
+    twitter: { card: 'summary', title, description },
   };
 }
 

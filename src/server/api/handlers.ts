@@ -10,7 +10,6 @@ import {
   type Principal,
 } from '../auth';
 import { getPortfolio, setDisplayName, startingBalanceMicro } from '../accounts';
-import { walletsOf } from '../wallets';
 import { runningVersion } from '../version';
 import { defaultMarketKind } from '@/lib/venue';
 import * as engine from '../engine';
@@ -446,7 +445,7 @@ export const getLeaderboard = route(async (req) => {
 export const getAccount = route(async (req, params) => {
   const principal = await authenticate(req);
   const handle = parseParam(params.handle, S.Handle, 'handle');
-  const { account, settledRecords } = await publicAccount(handle);
+  const { account } = await publicAccount(handle);
   events.log('account.read', { accountId: accountIdOf(principal) });
   return respond(
     S.PublicAccount,
@@ -458,11 +457,6 @@ export const getAccount = route(async (req, params) => {
       rorId: account.rorId,
       verifiedAt: toIsoOrNull(account.verifiedAt),
       createdAt: toIso(account.createdAt),
-      settledRecords: settledRecords.map((r) => ({
-        kind: r.kind,
-        settledPnlMicro: r.settledPnlMicro.toString(),
-        settledMarkets: r.settledMarkets,
-      })),
     },
     { principal },
   );
@@ -675,7 +669,7 @@ export const deleteCommentBacking = route(async (req, params) => {
 export const getMe = route(async (req) => {
   const principal = await requireAuth(req, 'read');
   events.log('me.read', { accountId: principal.account.id });
-  return respond(S.Me, presentMe(principal, await walletsOf(principal.account.id)), { principal });
+  return respond(S.Me, presentMe(principal), { principal });
 });
 
 /**
@@ -690,7 +684,7 @@ export const patchMe = route(async (req) => {
   if (body.mentionMailOptIn !== undefined) account = await setMentionMailOptIn(account.id, body.mentionMailOptIn);
   if (body.displayName !== undefined) account = await setDisplayName(account, body.displayName);
   events.log('me.updated', { accountId: account.id });
-  return respond(S.Me, presentMe({ ...principal, account }, await walletsOf(account.id)), { principal });
+  return respond(S.Me, presentMe({ ...principal, account }), { principal });
 });
 
 /** Listings you follow, each with its main market's headline price now and 24h ago. */

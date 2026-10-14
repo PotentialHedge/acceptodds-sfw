@@ -9,15 +9,6 @@ import type { Venue } from './types';
 export const NEURIPS_2026: Venue = {
   kind: 'NeurIPS 2026',
 
-  homeTitle: 'What will be the top papers at NeurIPS 2026?',
-  cardTitle: 'Which papers will be most cited?',
-  lede: 'A prediction market on citations',
-  marketOn: 'whether it is among the 25% most cited papers of its track by December 2027',
-  settlesWhen: 'citation counts are read on 1 December 2027',
-  unaffiliated: ['NeurIPS', 'OpenReview', 'Semantic Scholar'],
-  cardQuestion: { predicate: 'be a top paper', suffix: '@ NeurIPS 2026?' },
-  cardNote: 'your paper?',
-
   runningHead: 'Published as a conference paper at NeurIPS 2026',
   headlineLabel: 'top 25%',
   chanceOf: 'this paper is in the top 25% most cited by December 2027',

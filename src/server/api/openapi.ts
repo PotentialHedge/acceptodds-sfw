@@ -1,5 +1,6 @@
 import { OpenAPIRegistry, OpenApiGeneratorV31, type RouteConfig } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
+import { MARKET_API, under } from '@/lib/sfw';
 import { MAX_GROUPS_PER_ADMIN } from '../groups';
 import * as S from './schemas';
 
@@ -76,14 +77,14 @@ export function buildRegistry(): OpenAPIRegistry {
     in: 'cookie',
     name: 'better-auth.session_token',
     description:
-      'A signed-in browser session (sign up and sign in at /api/auth, with an email address at an approved institution). Equivalent to the `read` and `trade` scopes, plus `admin` if your email is in the server’s `ADMIN_EMAILS`. Writes must come from our own Origin.',
+      'A signed-in browser session (sign up and sign in at /api/auth, with an email address at an approved institution). Equivalent to the `read` scope, plus `admin` if your email is in the server’s `ADMIN_EMAILS`. Writes must come from our own Origin.',
   });
 
   r.registerComponent('securitySchemes', 'bearer', {
     type: 'http',
     scheme: 'bearer',
     description:
-      'An API token, `pm_live_…`. Scopes: `read` (me endpoints), `trade` (placing orders), `admin` (creating, closing and settling markets). No scope implies another. Every request made with a token counts against that token’s rate-limit bucket.',
+      'An API token, `pm_live_…`. Scopes: `read` (everything a signed-in account does: the me endpoints, follows, groups, reading lists, comments and reactions), `admin` (supplying listings, their texts, related papers and the map). `trade` is still accepted and grants nothing more. No scope implies another. Every request made with a token counts against that token’s rate-limit bucket.',
   });
 
   // -- public ---------------------------------------------------------------
@@ -161,7 +162,7 @@ export function buildRegistry(): OpenAPIRegistry {
       tags: ['listings'],
       summary: 'List listings',
       description:
-        'Newest first. A listing is an opaque subject that markets are grouped under; each comes with its markets, main market first. With `q`, only listings whose title, authors or summary — or any of whose visible markets’ question or description — match, best match first.',
+        'Newest first. A listing is a paper, supplied whole by the creating client. With `q`, only listings whose title, authors or summary match, best match first.',
       request: { query: S.ListingListQuery },
       ok: { status: 200, schema: S.ListingList, description: 'A page of listings.' },
     }),
@@ -172,8 +173,8 @@ export function buildRegistry(): OpenAPIRegistry {
       method: 'get',
       path: '/listings/{id}',
       tags: ['listings'],
-      summary: 'A listing and its markets',
-      description: 'Markets are ordered by `listingRank`; the first is the main market. Drafts are left out.',
+      summary: 'A listing',
+      description: 'The listing, with its follower and view counts.',
       request: { params: z.object({ id: S.ListingRef }) },
       ok: { status: 200, schema: S.Listing, description: 'The listing.' },
       errors: { 404: 'not_found' },
@@ -187,7 +188,7 @@ export function buildRegistry(): OpenAPIRegistry {
       tags: ['listings'],
       summary: 'What a listing cites, and what cites it',
       description:
-        'The bibliography the creating client supplied, each entry with the listing its slug names (and that listing’s main market) when one exists here; and the listings whose bibliography names this one.',
+        'The bibliography the creating client supplied, each entry with the listing its slug names when one exists here; and the listings whose bibliography names this one.',
       request: { params: z.object({ id: S.ListingRef }) },
       ok: { status: 200, schema: S.ListingCitations, description: 'The citations.' },
       errors: { 404: 'not_found' },
@@ -200,8 +201,7 @@ export function buildRegistry(): OpenAPIRegistry {
       path: '/listings/{id}/related',
       tags: ['listings'],
       summary: 'Listings related to this one',
-      description:
-        'Named by a separate similarity service, best first, each with its main market. The venue computes no similarity itself.',
+      description: 'Named by a separate similarity service, best first. The site computes no similarity itself.',
       request: { params: z.object({ id: S.ListingRef }) },
       ok: { status: 200, schema: S.ListingRelated, description: 'The related listings.' },
       errors: { 404: 'not_found' },
@@ -244,7 +244,7 @@ export function buildRegistry(): OpenAPIRegistry {
       tags: ['listings'],
       summary: 'Set a listing’s full text',
       description:
-        'Replaces it; `null` or empty clears it. Read to set the opening prices when the listing’s market is opened, and served by `GET /listings/{id}/text`. Its own call, so a client that writes listings never clears it.',
+        'Replaces it; `null` or empty clears it. Served by `GET /listings/{id}/text`. Its own call, so a client that writes listings never clears it.',
       scope: 'admin',
       request: {
         params: z.object({ id: S.ListingRef }),
@@ -261,11 +261,11 @@ export function buildRegistry(): OpenAPIRegistry {
         method,
         path: '/listings/{id}/closed',
         tags: ['listings'],
-        summary: method === 'put' ? 'Close a listing to new markets' : 'Open a closed listing again',
+        summary: method === 'put' ? 'Close a listing' : 'Open a closed listing again',
         description:
           method === 'put'
-            ? 'No new market opens on a closed listing: opening one, by `POST /listings/{id}/market` or a first order, is `409 listing_closed`. Its existing markets are unaffected; close those with `POST /markets/{id}/close`. Idempotent, and keeps the time it was first closed. Its own call, so re-posting the listing keeps it.'
-            : 'Markets may be opened on it again. Idempotent.',
+            ? 'Marks the listing closed (`closedAt`), for a paper that was withdrawn or desk-rejected. Idempotent, and keeps the time it was first closed. Its own call, so re-posting the listing keeps it.'
+            : 'Clears `closedAt`. Idempotent.',
         scope: 'admin',
         request: { params: z.object({ id: S.ListingRef }) },
         ok: { status: 200, schema: S.SetClosedResult, description: 'When it was closed, or null.' },
@@ -299,7 +299,7 @@ export function buildRegistry(): OpenAPIRegistry {
       tags: ['listings'],
       summary: 'The paper map',
       description:
-        'Every listing on a venue’s supplied 2D layout, by column: its slug, groupings, primary area and main market’s headline price. Each venue has its own map, or none (then empty). Titles are `GET /map/titles`. Laid out by a separate service; the platform computes no layout. Public, cached for five minutes.',
+        'Every listing on a venue’s supplied 2D layout, by column: its slug, groupings and primary area. Each venue has its own map, or none (then empty). Titles are `GET /map/titles`. Laid out by a separate service; the platform computes no layout. Public, cached for five minutes.',
       request: { query: S.MapQuery },
       ok: { status: 200, schema: S.PaperMap, description: 'The whole map.' },
     }),
@@ -325,7 +325,7 @@ export function buildRegistry(): OpenAPIRegistry {
       tags: ['listings'],
       summary: 'Search the paper map',
       description:
-        'The home page’s search syntax over a venue’s listings: words (titles, authors, abstracts), `key:value` filters (`title author keyword area venue status accept volume trades`), `OR`, parentheses and `-`. Returns every match’s slug, most relevant first.',
+        'The home page’s search syntax over a venue’s listings: words (titles, authors, abstracts), `key:value` filters (`title author keyword area venue`), `OR`, parentheses and `-`. Returns every match’s slug, most relevant first.',
       request: { query: S.MapSearchQuery },
       ok: { status: 200, schema: S.MapSearch, description: 'The matching slugs.' },
       errors: { 400: 'validation_error' },
@@ -406,7 +406,7 @@ export function buildRegistry(): OpenAPIRegistry {
       tags: ['accounts'],
       summary: 'Public profile',
       request: { params: z.object({ handle: S.Handle }) },
-      ok: { status: 200, schema: S.PublicAccount, description: 'Institution and settled record.' },
+      ok: { status: 200, schema: S.PublicAccount, description: 'The public profile.' },
       errors: { 404: 'not_found' },
     }),
   );
@@ -597,7 +597,7 @@ export function buildRegistry(): OpenAPIRegistry {
       tags: ['me'],
       summary: 'Update your settings',
       description:
-        '`digestOptIn` (the daily email about followed papers whose price moved), `mentionMailOptIn` (the email a comment mentioning you sends) and `displayName`.',
+        '`digestOptIn` (the daily email about followed papers), `mentionMailOptIn` (the email a comment mentioning you sends) and `displayName`.',
       scope: 'read',
       request: { body: { content: { 'application/json': { schema: S.UpdateMeRequest } } } },
       ok: { status: 200, schema: S.Me, description: 'The account, updated.' },
@@ -610,8 +610,7 @@ export function buildRegistry(): OpenAPIRegistry {
       path: '/me/follows',
       tags: ['me'],
       summary: 'Listings you follow',
-      description:
-        'Each with its main market’s headline price now and 24 hours ago (replayed from the fills). Prices, not values.',
+      description: 'Each followed listing, most recently followed first.',
       scope: 'read',
       ok: { status: 200, schema: S.FollowList, description: 'Your follows, most recent first.' },
     }),
@@ -669,8 +668,7 @@ export function buildRegistry(): OpenAPIRegistry {
       path: '/groups/{id}',
       tags: ['groups'],
       summary: 'A group',
-      description:
-        'Its members, each with their institutions. Public by id; the invite code only to members. Rank the group with `GET /leaderboard?group={id}`.',
+      description: 'Its members, each with their institutions. Public by id; the invite code only to members.',
       request: { params: groupIdParam },
       ok: { status: 200, schema: S.Group, description: 'The group.' },
       errors: { 404: 'not_found' },
@@ -829,7 +827,7 @@ export function buildRegistry(): OpenAPIRegistry {
         tags: ['listings'],
         summary: method === 'put' ? 'Follow a listing' : 'Unfollow a listing',
         description:
-          'Idempotent. A follow moves no money and needs only the `read` scope; followers may get a daily email when the listing’s main market moves (opt out with `PATCH /me`). Only listings can be followed.',
+          'Idempotent. Needs only the `read` scope; followers may get a daily email about the listings they follow (opt out with `PATCH /me`).',
         scope: 'read',
         request: { params: listingIdParam },
         ok: { status: 200, schema: S.FollowState, description: 'Whether you now follow it, and its follower count.' },
@@ -938,7 +936,7 @@ export function buildRegistry(): OpenAPIRegistry {
       tags: ['me'],
       summary: 'Mint an API token',
       description:
-        'Scopes `read` and/or `trade`. The token is returned once and never again. `admin` tokens are issued by an operator only.',
+        'Scope `read`. The token is returned once and never again. `admin` tokens are issued by an operator only.',
       request: { body: { content: { 'application/json': { schema: S.CreateTokenRequest } } } },
       ok: { status: 201, schema: S.CreatedToken, description: 'The token, shown once.' },
     }),
@@ -1069,7 +1067,7 @@ export function buildRegistry(): OpenAPIRegistry {
     tags: ['me'],
     summary: 'Remove an affiliation',
     description:
-      'Pending or confirmed; never the address you signed up with. Removing your last confirmed one stops you trading.',
+      'Pending or confirmed; never the address you signed up with. Removing your last confirmed one unverifies the account.',
     request: { params: affiliationIdParam },
     ok: { status: 200, schema: S.AffiliationList, description: 'unused' },
     errors: { 404: 'not_found', 409: 'primary_affiliation: the address you signed up with.' },
@@ -1085,7 +1083,7 @@ export function buildRegistry(): OpenAPIRegistry {
       tags: ['me'],
       summary: 'Set your first password',
       description:
-        'For an account made by onboarding (`POST /onboarding`), which has none. To change a password, reset it from the sign-in page.',
+        'For an account made by a sign-in link, which has none. To change a password, reset it from the sign-in page.',
       request: { body: { content: { 'application/json': { schema: S.SetPasswordRequest } } } },
       ok: { status: 200, schema: S.PasswordSet, description: 'Set. Sign in with it from now on.' },
       errors: { 409: 'password_already_set' },
@@ -1235,36 +1233,83 @@ export function buildRegistry(): OpenAPIRegistry {
 
 let cached: ReturnType<OpenApiGeneratorV31['generateDocument']> | undefined;
 
+/** Error codes only trading, settling and opening markets return. */
+const MARKET_ERROR_CODES = new Set([
+  'market_not_open',
+  'market_closed',
+  'market_already_settled',
+  'invalid_size',
+  'insufficient_balance',
+  'insufficient_shares',
+  'slippage_exceeded',
+  'house_underfunded',
+  'invalid_market',
+  'idempotency_key_reused',
+  'insufficient_stake',
+  'own_comment',
+  'bots_cannot_open_markets',
+  'listing_closed',
+]);
+
+/** Whether an OpenAPI path (`/markets/{id}`) is one the safe for work edition answers with a 404 (`MARKET_API`). */
+function isMarketPath(path: string): boolean {
+  const concrete = `/api/v1${path.replace(/\{[^}]+\}/g, 'x')}`;
+  return MARKET_API.some((p) => under(concrete, p));
+}
+
+/**
+ * The document without what the safe for work edition does not serve: every
+ * `MARKET_API` path (the proxy's 404s), then every schema no remaining path
+ * reaches, so nothing about markets, trading or reputation is published.
+ */
+function withoutMarkets(doc: ReturnType<OpenApiGeneratorV31['generateDocument']>) {
+  const paths = Object.fromEntries(Object.entries(doc.paths ?? {}).filter(([path]) => !isMarketPath(path)));
+  const schemas = (doc.components?.schemas ?? {}) as Record<string, unknown>;
+  const reached = new Set<string>();
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) return node.forEach(visit);
+    if (!node || typeof node !== 'object') return;
+    for (const [key, value] of Object.entries(node)) {
+      if (key === '$ref' && typeof value === 'string') {
+        const name = value.replace('#/components/schemas/', '');
+        if (!reached.has(name)) {
+          reached.add(name);
+          visit(schemas[name]);
+        }
+      } else visit(value);
+    }
+  };
+  visit(paths);
+  const kept = Object.fromEntries(Object.entries(schemas).filter(([name]) => reached.has(name)));
+  // The error codes stay a stable list (`errors.ts`); the document names only those this edition can return.
+  const code = (kept.Error as { properties?: { error?: { properties?: { code?: { enum?: string[] } } } } } | undefined)
+    ?.properties?.error?.properties?.code;
+  if (code?.enum) code.enum = code.enum.filter((c) => !MARKET_ERROR_CODES.has(c));
+  return { ...doc, paths, components: { ...doc.components, schemas: kept } } as typeof doc;
+}
+
 export function openApiDocument() {
-  cached ??= new OpenApiGeneratorV31(buildRegistry().definitions).generateDocument({
-    openapi: '3.1.0',
-    info: {
-      title: 'acceptodds API',
-      version: '1.0.0',
-      description:
-        'A prediction-market venue priced by LMSR, trading a non-convertible play currency called reputation. ' +
-        'Amounts are integer micro-units (1 unit = 1,000,000) sent as decimal strings. ' +
-        'Errors are always `{ "error": { "code", "message", "details"? } }` with a stable `code`.',
-    },
-    servers: [{ url: '/api/v1' }],
-    tags: [
-      { name: 'markets', description: 'Public market data.' },
-      { name: 'listings', description: 'Opaque subjects that group markets.' },
-      { name: 'trading', description: 'Quotes and orders.' },
-      { name: 'accounts', description: 'Public profiles and the leaderboard.' },
-      {
-        name: 'groups',
-        description: 'Reading groups: shared reading lists and traders ranked among themselves, joined by invite code.',
+  cached ??= withoutMarkets(
+    new OpenApiGeneratorV31(buildRegistry().definitions).generateDocument({
+      openapi: '3.1.0',
+      info: {
+        title: 'acceptodds API',
+        version: '1.0.0',
+        description:
+          'The safe for work edition of acceptodds: research papers by venue, with search, a map laid out by topic, ' +
+          'related papers, citations, follows and reading groups. There are no markets, prices or trading here. ' +
+          'Errors are always `{ "error": { "code", "message", "details"? } }` with a stable `code`.',
       },
-      { name: 'me', description: 'The authenticated account.' },
-      {
-        name: 'agents',
-        description: 'An AI agent signing in for a person, by a code mailed to them. See /agent/start.',
-      },
-      { name: 'onboarding', description: 'Signing up: plainly, or by choosing a first bet.' },
-      { name: 'admin', description: 'Requires the `admin` scope.' },
-      { name: 'meta', description: 'About the server itself.' },
-    ],
-  });
+      servers: [{ url: '/api/v1' }],
+      tags: [
+        { name: 'listings', description: 'Papers: search, text, citations, related papers and the map.' },
+        { name: 'accounts', description: 'Public profiles.' },
+        { name: 'groups', description: 'Reading groups and their shared reading lists, joined by invite code.' },
+        { name: 'me', description: 'The authenticated account.' },
+        { name: 'admin', description: 'Requires the `admin` scope.' },
+        { name: 'meta', description: 'About the server itself.' },
+      ],
+    }),
+  );
   return cached;
 }

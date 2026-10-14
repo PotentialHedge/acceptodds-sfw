@@ -189,7 +189,7 @@ describe('affiliations', () => {
 
     const twin = await signUp('twin@ethz.ch', 'Twin');
     const me = (await api('GET', '/me', { cookie: twin })).body;
-    expect(me).toMatchObject({ canTrade: false, verifiedAt: null, institutions: [] });
+    expect(me).toMatchObject({ verifiedAt: null, institutions: [] });
     expect((await api('GET', '/me/affiliations', { cookie: twin })).body.affiliations).toEqual([]);
   });
 
@@ -252,13 +252,13 @@ describe('affiliations', () => {
     const added = await add(cookie, 'ada@ethz.ch');
     await verify(cookie, added.body.id, codeFor('ada@ethz.ch')!);
     const me = (await api('GET', '/me', { cookie })).body;
-    expect(me).toMatchObject({ canTrade: true, institutions: ['ETH Zurich'], verifiedAt: expect.any(String) });
+    expect(me).toMatchObject({ institutions: ['ETH Zurich'], verifiedAt: expect.any(String) });
     const traded = await api('POST', `/markets/${fx.marketId}/orders`, { cookie, body: order(fx.outcomeIds[0]) });
     expect(traded.status).toBe(201);
 
-    // Removing the only confirmed one stops trading again.
+    // Removing the only confirmed one unverifies the account again.
     expect((await api('DELETE', `/me/affiliations/${added.body.id}`, { cookie })).status).toBe(204);
-    expect((await api('GET', '/me', { cookie })).body).toMatchObject({ canTrade: false, verifiedAt: null });
+    expect((await api('GET', '/me', { cookie })).body).toMatchObject({ verifiedAt: null });
   });
 
   it('never accepts an API token', async () => {
