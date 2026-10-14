@@ -1,3 +1,21 @@
+# Production, Safe for work edition: https://acceptodds.com
+#
+# Its own compose project (`acceptodds-sfw`), images, Traefik router and
+# database volume, beside the market edition's `acceptodds` project, which it
+# never writes to. Its database is a copy of the market edition's with the
+# trading data stripped out (scripts/strip-markets.sql), made once:
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d postgres
+#   docker start acceptodds-postgres-1           # the market edition's DB, only read
+#   docker exec acceptodds-postgres-1 sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
+#     | docker exec -i acceptodds-sfw-postgres-1 sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner'
+#   docker stop acceptodds-postgres-1
+#   docker exec -i acceptodds-sfw-postgres-1 sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+#     < scripts/strip-markets.sql
+#
+# Then build and start `app` as below, and take the market edition's
+# maintenance page down (it claims the same hosts at a higher priority).
+#
 # Production: https://acceptodds.com
 #
 # Runs behind the host's shared Traefik (~/proxy/docker-compose.yml), which owns
@@ -25,7 +43,7 @@
 #       (resets trading and users; preserves papers, related lists and map vectors)
 #       Add --reset-listings only to also wipe paper data and reload SQLite.
 
-name: acceptodds
+name: acceptodds-sfw
 
 x-logging: &logging
   driver: json-file
@@ -59,7 +77,7 @@ services:
       args:
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
     # One tag per commit (`docker ps` shows which is live); an older tag is the rollback.
-    image: acceptodds-app:${GIT_COMMIT:-latest}
+    image: acceptodds-sfw-app:${GIT_COMMIT:-latest}
     restart: unless-stopped
     logging: *logging
     env_file: .env.production
@@ -82,34 +100,34 @@ services:
       retries: 3
       start_period: 20s
     labels:
-      - acceptodds.commit=${GIT_COMMIT:-unknown}
+      - acceptodds-sfw.commit=${GIT_COMMIT:-unknown}
       - traefik.enable=true
       - traefik.docker.network=web
-      - traefik.http.routers.acceptodds.rule=Host(`acceptodds.com`) || Host(`www.acceptodds.com`)
-      - traefik.http.routers.acceptodds.entrypoints=websecure
-      - traefik.http.routers.acceptodds.tls=true
-      - traefik.http.routers.acceptodds.middlewares=acceptodds-www,acceptodds-headers,acceptodds-ratelimit
-      - traefik.http.services.acceptodds.loadbalancer.server.port=3000
+      - traefik.http.routers.acceptodds-sfw.rule=Host(`acceptodds.com`) || Host(`www.acceptodds.com`)
+      - traefik.http.routers.acceptodds-sfw.entrypoints=websecure
+      - traefik.http.routers.acceptodds-sfw.tls=true
+      - traefik.http.routers.acceptodds-sfw.middlewares=acceptodds-sfw-www,acceptodds-sfw-headers,acceptodds-sfw-ratelimit
+      - traefik.http.services.acceptodds-sfw.loadbalancer.server.port=3000
       # www -> apex, so Better Auth's single origin is the only one in use.
-      - traefik.http.middlewares.acceptodds-www.redirectregex.regex=^https://www\.acceptodds\.com/(.*)
-      - traefik.http.middlewares.acceptodds-www.redirectregex.replacement=https://acceptodds.com/$${1}
-      - traefik.http.middlewares.acceptodds-www.redirectregex.permanent=true
-      - traefik.http.middlewares.acceptodds-headers.headers.contenttypenosniff=true
-      - traefik.http.middlewares.acceptodds-headers.headers.framedeny=true
-      - traefik.http.middlewares.acceptodds-headers.headers.referrerpolicy=strict-origin-when-cross-origin
-      - traefik.http.middlewares.acceptodds-headers.headers.stsseconds=31536000
+      - traefik.http.middlewares.acceptodds-sfw-www.redirectregex.regex=^https://www\.acceptodds\.com/(.*)
+      - traefik.http.middlewares.acceptodds-sfw-www.redirectregex.replacement=https://acceptodds.com/$${1}
+      - traefik.http.middlewares.acceptodds-sfw-www.redirectregex.permanent=true
+      - traefik.http.middlewares.acceptodds-sfw-headers.headers.contenttypenosniff=true
+      - traefik.http.middlewares.acceptodds-sfw-headers.headers.framedeny=true
+      - traefik.http.middlewares.acceptodds-sfw-headers.headers.referrerpolicy=strict-origin-when-cross-origin
+      - traefik.http.middlewares.acceptodds-sfw-headers.headers.stsseconds=31536000
       # Anonymous traffic is the edge's job (AGENTS.md); keyed on the real client
       # IP, which is trustworthy because only Cloudflare can reach this origin.
-      - traefik.http.middlewares.acceptodds-ratelimit.ratelimit.average=${RATE_LIMIT_AVERAGE:-30}
-      - traefik.http.middlewares.acceptodds-ratelimit.ratelimit.burst=${RATE_LIMIT_BURST:-60}
-      - traefik.http.middlewares.acceptodds-ratelimit.ratelimit.period=1s
-      - traefik.http.middlewares.acceptodds-ratelimit.ratelimit.sourcecriterion.requestheadername=Cf-Connecting-Ip
+      - traefik.http.middlewares.acceptodds-sfw-ratelimit.ratelimit.average=${RATE_LIMIT_AVERAGE:-30}
+      - traefik.http.middlewares.acceptodds-sfw-ratelimit.ratelimit.burst=${RATE_LIMIT_BURST:-60}
+      - traefik.http.middlewares.acceptodds-sfw-ratelimit.ratelimit.period=1s
+      - traefik.http.middlewares.acceptodds-sfw-ratelimit.ratelimit.sourcecriterion.requestheadername=Cf-Connecting-Ip
 
   tools:
     build:
       context: .
       target: tools
-    image: acceptodds-tools
+    image: acceptodds-sfw-tools
     profiles: [tools]
     env_file: .env.production
     depends_on:
