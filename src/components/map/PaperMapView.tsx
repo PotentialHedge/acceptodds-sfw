@@ -64,7 +64,6 @@ const COLOURS: [ColourBy, string][] = [
   ['region', 'region'],
   ['cluster', 'cluster'],
   ['area', 'primary area'],
-  ['odds', 'odds'],
 ];
 const LABELS: [LabelMode, string][] = [
   ['auto', 'by zoom'],
@@ -136,7 +135,8 @@ export function PaperMapView({
       const raw = sessionStorage.getItem(MAP_FILTERS_KEY);
       const saved = raw ? MapFilters.safeParse(JSON.parse(raw)) : null;
       if (saved?.success) {
-        setColourBy(saved.data.colourBy);
+        // No odds in the safe for work edition: a colouring saved by the market edition falls back to region.
+        setColourBy(saved.data.colourBy === 'odds' ? 'region' : saved.data.colourBy);
         setLabelMode(saved.data.labelMode);
         setQuery(saved.data.query);
         setOpen(saved.data.open);
@@ -180,7 +180,8 @@ export function PaperMapView({
   const { data: follows } = useSWR<FollowList>(signedIn ? '/api/v1/me/follows' : null, viewerJson, {
     revalidateOnFocus: false,
   });
-  const { data: portfolio } = useSWR<Portfolio>(signedIn ? '/api/v1/me/portfolio' : null, viewerJson, {
+  // Safe for work edition: nothing is held, and the portfolio is not served.
+  const { data: portfolio } = useSWR<Portfolio>(null, viewerJson, {
     revalidateOnFocus: false,
   });
   const mine = useMemo(() => {
@@ -431,11 +432,6 @@ export function PaperMapView({
                   </label>
                   <Pointable kind="starred" at={pointAt} onPoint={setPointAt}>
                     <span className="text-ink">★</span> starred {mine.starred.length}
-                  </Pointable>
-                  ·
-                  <Pointable kind="held" at={pointAt} onPoint={setPointAt}>
-                    <span className="inline-block size-2.5 rounded-full border-[1.5px] border-accent align-[-1px]" />{' '}
-                    held {mine.held.length}
                   </Pointable>
                 </div>
               )}

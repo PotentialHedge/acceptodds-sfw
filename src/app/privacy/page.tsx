@@ -125,11 +125,12 @@ export default function PrivacyPage() {
             address.
           </li>
           <li>
-            <b>Cookies and browser storage</b> are only functional: the sign-in session, whether you have seen the
-            welcome page, which venue you last picked, which home-page sections you left open, which announcements you
-            dismissed, and a random token that ties a bet chosen during sign-up to this browser. Your browser’s own
-            storage remembers a pending confirmation, the last paper you read and, for each tab, your last home-page
-            search. None of it tracks you elsewhere.
+            <b>Cookies and browser storage</b> are only functional: the sign-in session, whether you have gone past the
+            first page (the way into the safe for work edition), whether you have seen the welcome page, which venue you
+            last picked, which home-page sections you left open, which announcements you dismissed, and a random token
+            that ties a bet chosen during sign-up to this browser. Your browser’s own storage remembers a pending
+            confirmation, the last paper you read and, for each tab, your last home-page search. None of it tracks you
+            elsewhere.
           </li>
         </ul>
         <p>

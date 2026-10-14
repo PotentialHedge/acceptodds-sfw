@@ -119,8 +119,8 @@ export function NewGroupButton({
       <ModalTrigger className={className}>{label}</ModalTrigger>
       <ModalContent title="Create reading group">
         <p className="mb-3 text-muted">
-          A shared reading list and a leaderboard of your own. Everyone who joins with your invite link can add papers,
-          remove them and mark what they have read.
+          A shared reading list of your own. Everyone who joins with your invite link can add papers, remove them and
+          mark what they have read.
         </p>
         <GroupForm
           initial={{ name: '', description: null }}
@@ -266,7 +266,7 @@ export function GroupActions({ group, role, viewerHandle, members }: GroupAction
           yes="Leave"
           action={async () => {
             await call('DELETE', `${base}/members/${encodeURIComponent(viewerHandle)}`);
-            router.push('/leaderboard');
+            router.push('/');
             router.refresh();
           }}
         >
@@ -342,7 +342,7 @@ export function GroupActions({ group, role, viewerHandle, members }: GroupAction
             yes="Delete reading group"
             action={async () => {
               await call('DELETE', base);
-              router.push('/leaderboard');
+              router.push('/');
               router.refresh();
             }}
           >

@@ -13,40 +13,19 @@ import { ScrollingLink } from '@/components/ScrollLink';
 import { RememberVenue, VenueInUrl } from '@/components/RememberVenue';
 import { RememberHomeSearch } from '@/components/HomeLink';
 import { TitleBlock } from '@/components/TitleBlock';
-import { OnboardAgent } from '@/components/OnboardAgent';
-import { InstitutionStrip } from '@/components/InstitutionStrip';
 import { Announcements } from '@/components/Announcements';
 import { currentAnnouncements } from '@/server/announcements';
 import { DISMISSED_COOKIE, parseDismissed } from '@/lib/announcements';
-import { TutorialModal } from '@/components/TutorialModal';
 import { Wordmark } from '@/components/Wordmark';
-import type { z } from 'zod';
-import type * as S from '@/server/api/schemas';
-import { presentListing } from '@/server/api/present';
 import { ui } from '@/components/ui';
-import { pricedBeforeTrade, venue, venues, type Venue } from '@/venues';
-import { rep, REP } from '@/lib/format';
 import { REPO_URL } from '@/lib/links';
-import { parseSearch, peopleText } from '@/lib/query';
+import { parseSearch } from '@/lib/query';
 import { normalizeSearch, SEARCH_MAX_LENGTH } from '@/lib/search';
 import { viewerFromHeaders } from '@/server/auth';
 import { currentVenue } from '@/server/current-venue';
-import { siteName, venuePreviewImages } from '@/server/share';
-import { startingBalanceMicro } from '@/server/accounts';
+import { siteName } from '@/server/share';
 import * as events from '@/server/events';
-import {
-  browseListings,
-  hasTraded,
-  listingViews,
-  MARKET_SORTS,
-  marketKinds,
-  searchPeople,
-  sparklines,
-  traderInstitutions,
-  type BrowsePage,
-  type BrowseRow,
-  type BrowseSort,
-} from '@/server/views';
+import { browseListings, marketKinds, type BrowsePage, type BrowseRow, type BrowseSort } from '@/server/views';
 import { canRecommend } from '@/server/recommendations';
 import { rowLink } from '@/lib/paper-link';
 
@@ -55,8 +34,8 @@ export const dynamic = 'force-dynamic';
 /** The selected filter link. */
 const ON = ui.on;
 
-const STATUSES = ['open', 'closed', 'settled', 'all'] as const;
-type Status = (typeof STATUSES)[number];
+/** Safe for work edition: a paper's status was its market's, so every list is every status. */
+type Status = 'all';
 
 /** Papers per page in the main list; `?page=` pages it. */
 const PAGE = 50;
@@ -64,51 +43,25 @@ const PAGE = 50;
 const FOLLOWING_PAGE = 10;
 /** The cookie remembering whether that section was left collapsed. */
 const FOLLOWING_COOKIE = 'home_following_open';
-/** Same for the "My positions" section. */
-const POSITIONS_PAGE = 10;
-const POSITIONS_COOKIE = 'home_positions_open';
-/** Traders shown above the papers when a search reads like a name. */
-const PEOPLE = 5;
 
-/** "A, B or C": the organisations the abstract disclaims, then "any other". */
-function orList(items: readonly string[]): string {
-  return items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`;
-}
-
-/**
- * What the site is, above the search, in the selected venue's words
- * (`venues/`): its own `abstract` when it has one, else one built from its
- * pieces; with no venue, words that fit them all. Hidden while searching.
- */
-const abstract = (v: Venue | null) => {
-  const balance = `${rep(startingBalanceMicro(), 0)} ${REP}`;
-  return (
-    <>
-      {v?.abstract ? (
-        v.abstract.replaceAll('{balance}', balance)
-      ) : (
-        <>
-          {v?.lede ?? 'A prediction market on research papers'}. Each paper has a market on{' '}
-          {v?.marketOn ?? 'what becomes of it'}, priced by researchers who stake $rep, an in app currency, on what they
-          expect. Everyone who signs up receives {balance} to trade with in each venue. Prices are probabilities, and
-          every market settles when {v?.settlesWhen ?? 'its outcome is known'}. It is a game made for fun, and has no
-          connection to{' '}
-          {orList([...new Set((v ? [v] : venues()).flatMap((x) => x.unaffiliated)), 'any other organisation'])}.
-        </>
-      )}{' '}
-      acceptodds is an open source project, open to contributions, at{' '}
-      <a href={REPO_URL} className={ui.hyperref}>
-        {REPO_URL.replace(/^https:\/\//, '')}
+/** What the site is, above the search. Hidden while searching. */
+const abstract = (
+  <>
+    The safe for work edition of acceptodds: the submissions, without the markets. Search them, browse them on a map
+    laid out by what they are about, follow the ones you care about, keep reading lists with your group, and get
+    recommendations from what you read. There are no odds, no bets and no reputation here. acceptodds is an open source
+    project, open to contributions, at{' '}
+    <a href={REPO_URL} className={ui.hyperref}>
+      {REPO_URL.replace(/^https:\/\//, '')}
+    </a>
+    .
+    <sup>
+      <a href="#footnote-1" id="footnote-1-ref" className="text-accent">
+        1
       </a>
-      .
-      <sup>
-        <a href="#footnote-1" id="footnote-1-ref" className="text-accent">
-          1
-        </a>
-      </sup>
-    </>
-  );
-};
+    </sup>
+  </>
+);
 
 /** The abstract's footnote, set at the foot of the page as a paper's is. */
 const FOOTNOTE = (
@@ -122,16 +75,15 @@ const FOOTNOTE = (
   </div>
 );
 
-/** The home page's sorts, default first: activity. The venue's `closing` is not offered. */
-const SORTS: readonly BrowseSort[] = ['activity', ...MARKET_SORTS.filter((s) => s !== 'closing' && s !== 'activity')];
-/** Sorts kept out of the row, in the ⋯ menu (on a phone every sort is in the filter menu). */
-const MENU_SORTS: readonly BrowseSort[] = ['volume', 'newest'];
-/** Sort keys shown under another name: `likelihood` is the headline (`lib/headline.ts`). */
-const sortLabel = (s: BrowseSort) => (s === 'likelihood' ? 'odds' : s);
+/** The home page's sorts, default first. None reads a market. */
+const SORTS: readonly BrowseSort[] = ['newest', 'popular'];
+/** Sorts kept out of the row, in the ⋯ menu. */
+const MENU_SORTS: readonly BrowseSort[] = [];
+const sortLabel = (s: BrowseSort) => (s === 'popular' ? 'most read' : s);
 
-/** The page's title after the wordmark: the venue's question, or one that fits any venue. */
+/** The page's title after the wordmark. */
 function homeTitle(kind: string | null): string {
-  return venue(kind)?.homeTitle ?? `Which papers will make it${kind ? ` at ${kind}` : ''}?`;
+  return kind ? `the papers of ${kind}` : 'the papers';
 }
 
 function one(v: string | string[] | undefined): string | undefined {
@@ -172,9 +124,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const kind = selectedKind(one((await searchParams).kind), await marketKinds(), await currentVenue());
   const title = `acceptodds: ${homeTitle(kind)}`;
-  const description = 'A prediction market on the fate of research papers, traded in reputation.';
-  // A shared home link names its venue (`VenueInUrl`), and its preview is that venue's card.
-  const images = venuePreviewImages(kind);
+  const description = 'Search, map and follow research papers: the safe for work edition of acceptodds.';
   return {
     title,
     openGraph: {
@@ -183,9 +133,8 @@ export async function generateMetadata({
       url: kind ? `/?${new URLSearchParams({ kind })}` : '/',
       type: 'website',
       siteName: siteName(),
-      images,
     },
-    twitter: { card: 'summary_large_image', title, description, images },
+    twitter: { card: 'summary', title, description },
   };
 }
 
@@ -200,9 +149,7 @@ export default async function Home({
   // The venue the navbar was drawn in: the list's, unless the URL names another.
   const navVenue = await currentVenue();
   const kind = selectedKind(wanted, kinds, navVenue);
-  const status: Status = (STATUSES as readonly string[]).includes(one(sp.status) ?? '')
-    ? (one(sp.status) as Status)
-    : 'open';
+  const status: Status = 'all';
   // A search keeps the venue and status filters (the form carries them) and
   // sorts by relevance unless another sort is asked for.
   const q = normalizeSearch(one(sp.q));
@@ -210,7 +157,7 @@ export default async function Home({
   // says where to look, so the page's own filter of that kind steps aside.
   const parsed = q ? parseSearch(q) : null;
   const kindFilter = parsed?.fields.has('venue') ? null : kind;
-  const statusFilter: Status = parsed?.fields.has('status') ? 'all' : status;
+  const statusFilter: Status = status;
   const viewer = await viewerFromHeaders(await headers());
   const me = viewer?.account.id ?? null;
   // `recommended` once the viewer has done enough for it to mean something (`server/recommendations.ts`).
@@ -230,16 +177,12 @@ export default async function Home({
   const onlyFollowed = viewer !== null && one(sp.following) === '1';
   // ?tldr=1: each paper's TLDR under its authors.
   const showTldr = one(sp.tldr) === '1';
-  // Papers the viewer follows, then papers they hold shares in, are pinned
-  // above the list: same venue, status and sort, each paged on its own, and
-  // none repeated. A paper both followed and held is under My positions. Not while searching, nor when the list is already
-  // only followed papers.
+  // Papers the viewer follows are pinned above the list: same venue and sort,
+  // paged on their own, and not repeated. Not while searching, nor when the
+  // list is already only followed papers.
   const pins = me !== null && !q && !onlyFollowed;
   const browse = { kind, status, sort };
-  // A search that is only words may be a name: traders above the papers, on
-  // the first page.
-  const who = peopleText(parsed?.node ?? null);
-  const [all, followed, held, people, busiest, traded, institutions, notes] = await Promise.all([
+  const [all, followed, notes] = await Promise.all([
     pageOf(sp.page, PAGE, {
       ...browse,
       kind: kindFilter,
@@ -247,35 +190,18 @@ export default async function Home({
       q,
       followedBy: onlyFollowed ? me : null,
       exceptFollowedBy: pins ? me : null,
-      exceptHeldBy: pins ? me : null,
       recommendFor: me,
     }),
-    pins ? pageOf(sp.fpage, FOLLOWING_PAGE, { ...browse, followedBy: me, exceptHeldBy: me }) : null,
-    pins ? pageOf(sp.hpage, POSITIONS_PAGE, { ...browse, heldBy: me }) : null,
-    who && (one(sp.page) ?? '1') === '1' ? searchPeople(who, PEOPLE) : [],
-    // The tutorial shows one real market's odds: the venue's most traded open paper.
-    browseListings({ kind: kind ?? navVenue, status: 'open', sort: 'volume', traded: true, limit: 1 }),
-    // A trader who has placed an order is past getting started: no tutorial.
-    me !== null ? hasTraded(me) : false,
-    // Signed out, and not searching: where the traders are from.
-    viewer === null && !q ? traderInstitutions() : [],
+    pins ? pageOf(sp.fpage, FOLLOWING_PAGE, { ...browse, followedBy: me }) : null,
     // The admin's messages: this venue's and every venue's, or all of them when the list is every venue;
     // those for signed-in readers only to a signed-in viewer.
     currentAnnouncements(kind ?? undefined, viewer !== null),
   ]);
-  const busiestListing = busiest.rows[0]?.listing;
-  const [tutorialExample] = busiestListing
-    ? ((await listingViews([busiestListing])).map(presentListing) as z.output<typeof S.Listing>[])
-    : [];
   const cookieJar = await cookies();
   const followingOpen = cookieJar.get(FOLLOWING_COOKIE)?.value !== '0';
-  const positionsOpen = cookieJar.get(POSITIONS_COOKIE)?.value !== '0';
   // Those this browser dismissed are left out here, never hidden after drawing.
   const dismissed = new Set(parseDismissed(cookieJar.get(DISMISSED_COOKIE)?.value));
   const announcements = notes.filter((a) => !dismissed.has(a.id));
-  const sparks = await sparklines(
-    [...all.rows, ...(followed?.rows ?? []), ...(held?.rows ?? [])].flatMap((r) => (r.main ? [r.main] : [])),
-  );
   events.log('market.list', { accountId: me });
 
   // Filter links keep the search; `q: ''` drops it (and its relevance sort).
@@ -285,7 +211,6 @@ export default async function Home({
   const href = (patch: Record<string, string>) => {
     const params = new URLSearchParams({
       kind: kind ?? 'all',
-      status,
       sort,
       ...(q ? { q } : {}),
       ...(onlyFollowed ? { following: '1' } : {}),
@@ -298,19 +223,17 @@ export default async function Home({
     }
     if (params.get('following') === '0') params.delete('following');
     if (params.get('tldr') === '0') params.delete('tldr');
-    for (const key of ['page', 'fpage', 'hpage']) if (params.get(key) === '1') params.delete(key);
+    for (const key of ['page', 'fpage']) if (params.get(key) === '1') params.delete(key);
     return `/?${params}`;
   };
   // A pager's link to page `p` of its section, keeping the other sections' pages.
-  const pages = { page: String(all.page), fpage: String(followed?.page ?? 1), hpage: String(held?.page ?? 1) };
+  const pages = { page: String(all.page), fpage: String(followed?.page ?? 1) };
   const pageHref = (key: keyof typeof pages, anchor: string) => (p: number) =>
     `${href({ ...pages, [key]: String(p) })}${anchor}`;
-  const filtered = kindFilter !== null || statusFilter !== 'all';
-  const pinnedCount = (followed?.total ?? 0) + (held?.total ?? 0);
+  const filtered = kindFilter !== null;
+  const pinnedCount = followed?.total ?? 0;
   // Shown on the ⋯ trigger when not the defaults.
-  const activeFilters = [status !== 'open' && status, onlyFollowed && '★', showTldr && 'tldr']
-    .filter(Boolean)
-    .join(', ');
+  const activeFilters = [onlyFollowed && '★', showTldr && 'tldr'].filter(Boolean).join(', ');
   // The ⋯ trigger also names a sort picked from its menu, since the row doesn't show it.
   const menuSort = MENU_SORTS.includes(sort) ? sortLabel(sort) : null;
   const moreLabel = [menuSort, activeFilters].filter(Boolean).join(', ');
@@ -330,37 +253,20 @@ export default async function Home({
             <Wordmark />: {homeTitle(kind)}
           </>
         }
-        abstract={q ? null : abstract(venue(kind))}
+        abstract={q ? null : abstract}
         abstractFull
-      >
-        <div className="flex flex-wrap items-baseline justify-center gap-x-6">
-          {!traded && (
-            <TutorialModal
-              example={tutorialExample}
-              startingBalanceMicro={startingBalanceMicro().toString()}
-              signedIn={viewer !== null}
-            />
-          )}
-          {viewer && (
-            <div className="max-w-sm">
-              <OnboardAgent signedIn className={`font-sans text-[13px] ${ui.linkBtn}`} />
-            </div>
-          )}
-        </div>
-      </TitleBlock>
-      <InstitutionStrip institutions={institutions} />
+      />
       {/* A plain GET form, so search works without JavaScript. */}
       <form action="/" method="get" role="search" className="mt-5 flex gap-2">
         <input type="hidden" name="kind" value={kind ?? 'all'} />
-        <input type="hidden" name="status" value={status} />
         {onlyFollowed && <input type="hidden" name="following" value="1" />}
         {showTldr && <input type="hidden" name="tldr" value="1" />}
         <SearchInput
           name="q"
           defaultValue={q ?? ''}
           maxLength={SEARCH_MAX_LENGTH}
-          aria-label="Search papers and people"
-          placeholder="Search papers and people"
+          aria-label="Search papers"
+          placeholder="Search papers"
           className={ui.searchInput}
         />
         <button type="submit" className={ui.searchBtn}>
@@ -391,18 +297,6 @@ export default async function Home({
                 ))}
               </div>
             </div>
-            <div>
-              <h3 className={ui.boxHeading}>Status</h3>
-              <div className="flex flex-wrap gap-x-4 gap-y-2">
-                {STATUSES.map((s) => (
-                  <PopoverClose key={s} asChild>
-                    <Link href={href({ status: s })} className={s === status ? ON : ''}>
-                      {s}
-                    </Link>
-                  </PopoverClose>
-                ))}
-              </div>
-            </div>
             {viewer && (
               <PopoverClose asChild>
                 <Link href={href({ following: onlyFollowed ? '0' : '1' })} className={onlyFollowed ? ON : ''}>
@@ -418,7 +312,7 @@ export default async function Home({
             <details className="border-t border-rule pt-2.5">
               <summary className={`${ui.runIn} cursor-pointer`}>Search syntax</summary>
               <div className="mt-2 text-xs leading-normal text-muted">
-                <SearchSyntax people />
+                <SearchSyntax />
               </div>
             </details>
           </PopoverContent>
@@ -432,34 +326,8 @@ export default async function Home({
       {q && (
         <div className="mt-2 font-sans text-[13px] text-muted">
           {all.total.toLocaleString('en')} {all.total === 1 ? 'result' : 'results'} for “{q}”
-          {filtered && (
-            <>
-              {' '}
-              in {kindFilter ?? 'all venues'}
-              {statusFilter !== 'all' && `, ${statusFilter}`}.
-            </>
-          )}{' '}
-          <Link href={href({ q: '' })}>clear</Link>
+          {filtered && <> in {kindFilter ?? 'all venues'}.</>} <Link href={href({ q: '' })}>clear</Link>
         </div>
-      )}
-
-      {people.length > 0 && (
-        <section aria-label="People">
-          <h2 className={ui.groupHeading}>People</h2>
-          {people.map((p) => (
-            <Link
-              key={p.accountId}
-              href={`/people/${encodeURIComponent(p.handle)}`}
-              className="flex items-baseline gap-2 border-b border-dotted border-rule-strong py-1.5 hover:bg-highlight hover:no-underline"
-            >
-              <span>{p.displayName}</span>
-              <span className="font-mono text-xs text-muted">@{p.handle}</span>
-              {p.isBot && <span className={ui.badge}>bot</span>}
-              <span className="flex-1" />
-              <span className="font-sans text-xs text-muted">{p.institutions.join('; ')}</span>
-            </Link>
-          ))}
-        </section>
       )}
 
       <div className="mt-2 mb-1 flex flex-wrap items-baseline gap-x-4.5 gap-y-1.5 font-sans text-[13px] text-muted narrow:hidden">
@@ -479,7 +347,7 @@ export default async function Home({
           {/* Not a flex box: an icon alone gives a flex item no text baseline, and the row aligns on
               baselines. Inline, `align-middle` centres the dots on the text's x-height. */}
           <PopoverTrigger
-            title="More sorts and filters: status, following, TLDRs"
+            title="More filters: following, TLDRs"
             className="-my-1 cursor-pointer px-1 py-1 text-ink hover:text-accent"
           >
             {moreLabel}
@@ -493,31 +361,15 @@ export default async function Home({
                 </SortLink>
               </PopoverClose>
             ))}
-            {STATUSES.map((s, i) => (
-              <PopoverClose key={s} asChild>
-                <Link
-                  href={href({ status: s })}
-                  className={`${i === 0 ? 'mt-1 border-t border-rule pt-1.5 ' : ''}${s === status ? ON : ''}`}
-                >
-                  {s}
-                </Link>
-              </PopoverClose>
-            ))}
             {viewer && (
               <PopoverClose asChild>
-                <Link
-                  href={href({ following: onlyFollowed ? '0' : '1' })}
-                  className={`mt-1 border-t border-rule pt-1.5 ${onlyFollowed ? ON : ''}`}
-                >
+                <Link href={href({ following: onlyFollowed ? '0' : '1' })} className={onlyFollowed ? ON : ''}>
                   ★ following
                 </Link>
               </PopoverClose>
             )}
             <PopoverClose asChild>
-              <Link
-                href={href({ tldr: showTldr ? '0' : '1' })}
-                className={`${viewer ? '' : 'mt-1 border-t border-rule pt-1.5 '}${showTldr ? ON : ''}`}
-              >
+              <Link href={href({ tldr: showTldr ? '0' : '1' })} className={showTldr ? ON : ''}>
                 show TLDRs
               </Link>
             </PopoverClose>
@@ -531,11 +383,9 @@ export default async function Home({
             No {onlyFollowed ? 'papers you follow' : 'papers'} match “{q}”.
           </div>
         ) : onlyFollowed ? (
-          <div className={ui.empty}>
-            No {status === 'all' ? '' : status + ' '}papers you follow here. Follow one with ☆ on its page.
-          </div>
+          <div className={ui.empty}>No papers you follow here. Follow one with ☆ on its page.</div>
         ) : (
-          <div className={ui.empty}>Nothing {status === 'all' ? '' : status + ' '}here yet.</div>
+          <div className={ui.empty}>Nothing here yet.</div>
         ))}
 
       {followed && followed.total > 0 && (
@@ -551,28 +401,9 @@ export default async function Home({
           }
         >
           {followed.rows.map((r) => (
-            <Row key={rowKey(r)} r={r} spark={(r.main && sparks.get(r.main.market.id)) || []} tldr={showTldr} />
+            <Row key={rowKey(r)} r={r} tldr={showTldr} />
           ))}
           <Pager page={followed.page} pages={followed.pages} href={pageHref('fpage', '#following')} />
-        </Collapsible>
-      )}
-
-      {held && held.total > 0 && (
-        <Collapsible
-          id="positions"
-          cookie={POSITIONS_COOKIE}
-          open={positionsOpen}
-          className="group"
-          summary={
-            <>
-              My positions <span className="font-normal">({held.total})</span>
-            </>
-          }
-        >
-          {held.rows.map((r) => (
-            <Row key={rowKey(r)} r={r} spark={(r.main && sparks.get(r.main.market.id)) || []} tldr={showTldr} />
-          ))}
-          <Pager page={held.page} pages={held.pages} href={pageHref('hpage', '#positions')} />
         </Collapsible>
       )}
 
@@ -586,7 +417,7 @@ export default async function Home({
             <div className="h-3.5" />
           )}
           {all.rows.map((r) => (
-            <Row key={rowKey(r)} r={r} spark={(r.main && sparks.get(r.main.market.id)) || []} tldr={showTldr} />
+            <Row key={rowKey(r)} r={r} tldr={showTldr} />
           ))}
           <Pager page={all.page} pages={all.pages} href={pageHref('page', pinnedCount > 0 ? '#all' : '')} />
         </section>
@@ -615,7 +446,7 @@ function SearchHelp() {
         ?
       </PopoverTrigger>
       <PopoverContent align="end" className="text-xs leading-normal text-muted">
-        <SearchSyntax people />
+        <SearchSyntax />
       </PopoverContent>
     </Popover>
   );
@@ -627,7 +458,7 @@ function SearchHelp() {
  * is itself a link could not hold the paper's own PDF link, which sits above
  * the stretched one, in a column of its own at the left so titles align.
  */
-function Row({ r, spark, tldr }: { r: BrowseRow; spark: number[]; tldr: boolean }) {
+function Row({ r, tldr }: { r: BrowseRow; tldr: boolean }) {
   const pdf = rowLink(r.listing?.links ?? []);
   return (
     <PaperRow
@@ -635,14 +466,6 @@ function Row({ r, spark, tldr }: { r: BrowseRow; spark: number[]; tldr: boolean 
       authors={r.listing?.authors ?? []}
       pdf={pdf}
       tldr={tldr ? r.listing?.tldr : null}
-      // No price on the list until someone trades, where an untraded market's is only JEV's (`pricedBeforeTrade`).
-      market={
-        r.main && (r.main.orderCount > 0 || pricedBeforeTrade(r.main.market.kind))
-          ? { ...r.main.market, outcomes: r.main.outcomes }
-          : null
-      }
-      volumeMicro={r.totalOrderCount > 0 ? r.totalVolumeMicro : null}
-      spark={spark}
       href={r.listing ? `/papers/${r.listing.slug}` : `/markets/${r.main?.market.slug}`}
     />
   );

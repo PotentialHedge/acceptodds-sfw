@@ -1,6 +1,5 @@
 import { readingGroupIdsForListing, readingStatuses } from '@/server/reading';
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { Citations } from '@/components/Citations';
@@ -9,43 +8,20 @@ import { AddToReadingList, ReadEye } from '@/components/ReadingList';
 import { groupsOf } from '@/server/groups';
 import { FollowStar } from '@/components/FollowStar';
 import { MathText } from '@/components/MathText';
-import { TableNotes } from '@/components/TableNotes';
 import { RememberVenue } from '@/components/RememberVenue';
 import { RunningHead } from '@/components/RunningHead';
 import { TitleBlock } from '@/components/TitleBlock';
 import { ViewCount } from '@/components/ViewCount';
 import { ui } from '@/components/ui';
-import { pct } from '@/lib/format';
-import { marketHeadline, shareTitleLine } from '@/lib/headline';
-import { JEV_PRICE_PARAM, shortPath } from '@/lib/links';
-import { likelihoodClass, marketLikelihood } from '@/lib/likelihood';
-import type { z } from 'zod';
 import type { Listing } from '@/db/schema';
 import { ApiError } from '@/server/api/errors';
-import { presentMarket } from '@/server/api/present';
-import type * as S from '@/server/api/schemas';
 import { viewerFromHeaders } from '@/server/auth';
 import { currentVenue } from '@/server/current-venue';
 import * as events from '@/server/events';
 import { followedListingIds } from '@/server/follows';
-import { jevOpeningEnabled } from '@/server/jev';
-import { openMarketTemplate } from '@/server/market-templates';
-import { runningHead, venue } from '@/venues';
+import { runningHead } from '@/venues';
 import { shareSubject, siteName, siteUrl } from '@/server/share';
-import {
-  listingCitations,
-  listingRelatedTo,
-  listingView,
-  onMap,
-  resolveListing,
-  tradingMarketIds,
-  type MarketView,
-} from '@/server/views';
-import { marketLiveFigures } from '../../markets/[slug]/figures';
-import { loadMarketLive } from '../../markets/[slug]/load';
-import { MarketLive } from '../../markets/[slug]/MarketLive';
-import { JevPrice } from './JevPrice';
-import { SharePanel } from './SharePanel';
+import { listingCitations, listingRelatedTo, listingView, onMap, resolveListing } from '@/server/views';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,19 +33,13 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const subject = await shareSubject(decodeURIComponent((await params).slug));
   if (!subject) return {};
-  const question = shareTitleLine(subject.title, subject.kind, 120);
-  const chanceOf = venue(subject.kind)?.chanceOf;
-  const description = chanceOf
-    ? `How likely is it that ${chanceOf}? See the odds, and trade on them.`
-    : subject.kind
-      ? `Where do traders think this paper lands at ${subject.kind}? See the odds, and trade on them.`
-      : 'See the odds, and trade on them.';
+  const description = subject.listing?.summary?.slice(0, 200) ?? subject.title;
   return {
     title: `${subject.title.replace(/\$/g, '')} | ${siteName()}`,
     description,
     alternates: { canonical: subject.path },
-    openGraph: { title: question, description, url: subject.path, type: 'article', siteName: siteName() },
-    twitter: { card: 'summary_large_image', title: question, description },
+    openGraph: { title: subject.title, description, url: subject.path, type: 'article', siteName: siteName() },
+    twitter: { card: 'summary', title: subject.title, description },
   };
 }
 
@@ -92,18 +62,11 @@ function paperJsonLd(l: Listing) {
  * A listing's page. The platform calls it a listing and knows nothing about
  * what it is; the UI calls it a paper, because that is what `../research`
  * lists. Title, names, links and summary are shown as the client supplied
- * them. Below them, its markets, and the selected one (`?market=<slug>`,
- * default the main market, rank 0) rendered live.
+ * them. Safe for work edition: no markets below them, only the related
+ * papers (with the minimap) and the citations.
  */
-export default async function PaperPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ slug: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function PaperPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const sp = await searchParams;
   let listing;
   try {
     listing = await resolveListing(decodeURIComponent(slug));
@@ -118,33 +81,22 @@ export default async function PaperPage({
     listingRelatedTo(listing),
     onMap(listing),
   ]);
-  const wanted = Array.isArray(sp.market) ? sp.market[0] : sp.market;
-  const selected = markets.find((m) => m.market.slug === wanted) ?? markets[0];
 
   const viewer = await viewerFromHeaders(await headers());
-  const initial = selected ? await loadMarketLive(selected.market, viewer) : null;
   const following = viewer ? (await followedListingIds(viewer.account.id)).has(listing.id) : false;
   const [myReadingGroups, alreadyListed] = viewer
     ? await Promise.all([groupsOf(viewer.account.id), readingGroupIdsForListing(viewer.account.id, listing.id)])
     : [[], new Set<string>()];
   const [readStatus] = await readingStatuses([listing.id], viewer?.account.id ?? null);
-  // A paper with no market yet can be traded while its kind's markets are open, unless it is closed.
-  const opening = markets.length === 0 && !listing.closedAt ? openMarketTemplate(listing.kind) : null;
-  // Nobody has bet on it, and someone could: the related papers held back say where to.
   const main = markets[0];
-  const unbet =
-    main === undefined
-      ? opening !== null
-      : main.orderCount === 0 && (await tradingMarketIds([main.market.id])).length > 0;
   const venueOf = listing.kind ?? main?.market.kind ?? null;
   events.log('listing.read', { accountId: viewer?.account.id ?? null });
-  // Before the discussion, its figure numbered after the market's own.
   const relatedPapers = (
     <RelatedPapers
       related={related}
       minimapOf={mapped ? listing.slug : null}
-      figure={(initial ? marketLiveFigures(initial.market, initial.venue !== null) : 0) + 1}
-      unlock={unbet ? (main === undefined ? 'open' : 'bet') : null}
+      figure={1}
+      unlock={null}
       venue={listing.kind}
     />
   );
@@ -156,7 +108,7 @@ export default async function PaperPage({
         // `<` escaped so a title can never close the tag.
         dangerouslySetInnerHTML={{ __html: JSON.stringify(paperJsonLd(listing)).replace(/</g, '\\u003c') }}
       />
-      {/* The paper's venue becomes the navbar's, so the wallet shown is the one the trade box spends. */}
+      {/* The paper's venue becomes the navbar's. */}
       {venueOf && <RememberVenue kind={venueOf} stale={venueOf !== (await currentVenue())} />}
       {listing.kind && <RunningHead>{runningHead(listing.kind)}</RunningHead>}
       <TitleBlock
@@ -198,103 +150,10 @@ export default async function PaperPage({
               />
             </>
           )}
-          {markets[0] && (
-            <SharePanel
-              title={listing.title}
-              kind={listing.kind ?? markets[0].market.kind}
-              shareUrl={`${siteUrl()}${shortPath(listing.shortId)}`}
-              badgeUrl={`${siteUrl()}/badge/${encodeURIComponent(listing.slug)}.svg`}
-              initial={presentMarket(markets[0]) as z.output<typeof S.Market>}
-            />
-          )}
         </div>
       </TitleBlock>
 
-      {/* Nobody has opened its market yet: asking JEV for the opening price does. */}
-      {markets.length === 0 &&
-        (opening ? (
-          <section id="trade" className="mt-10 scroll-mt-4">
-            <JevPrice
-              listingId={listing.id}
-              slug={listing.slug}
-              kind={listing.kind}
-              outcomes={opening.outcomes}
-              byJev={opening.jev !== null && jevOpeningEnabled()}
-              asked={(Array.isArray(sp[JEV_PRICE_PARAM]) ? sp[JEV_PRICE_PARAM][0] : sp[JEV_PRICE_PARAM]) === 'jev'}
-              viewer={{
-                signedIn: viewer !== null,
-                canTrade: viewer !== null && (viewer.account.isBot || viewer.account.verifiedAt !== null),
-              }}
-            />
-          </section>
-        ) : (
-          <div className={ui.empty}>
-            {listing.closedAt ? 'No market will open on this paper.' : 'No markets on this paper yet.'}
-          </div>
-        ))}
-      {/* One market per paper is the default; the list is only for a paper with more. */}
-      {markets.length > 1 && (
-        <section className="mt-10">
-          <h2 className={`${ui.section} mb-3`}>Markets</h2>
-          <table className={ui.table}>
-            <caption className={ui.tableCaption}>
-              <b>Table 1.</b> The markets on this paper, main market first. The one shown below is highlighted.
-            </caption>
-            <thead>
-              <tr>
-                <th className={ui.th()}>Market</th>
-                <th className={ui.th(true)}>
-                  Chance<sup className={ui.mark}>a</sup>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {markets.map((m) => {
-                const on = m.market.id === selected?.market.id;
-                const look = likelihoodClass(marketLikelihood({ ...m.market, outcomes: m.outcomes }));
-                return (
-                  <tr key={m.market.id} className={on ? 'bg-tint' : ''}>
-                    <td className={ui.td}>
-                      <Link
-                        href={`/papers/${encodeURIComponent(listing.slug)}?market=${encodeURIComponent(m.market.slug)}`}
-                        scroll={false}
-                        aria-current={on ? 'page' : undefined}
-                        className={on ? 'font-semibold text-ink' : 'text-ink'}
-                      >
-                        {m.market.question}
-                      </Link>
-                      {m.market.status !== 'open' && <span className={ui.badge}>{m.market.status}</span>}
-                    </td>
-                    <td className={`${ui.td} ${ui.num}`}>
-                      <span className={`rounded-[3px] px-1.5 ${look.chip}`}>{headline(m)}</span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <TableNotes
-            notes={[
-              [
-                'a',
-                'One minus the price of the last outcome: for a decision, the chance the paper is accepted in any form; for a yes/no question, the chance of yes. Once settled, the result.',
-              ],
-            ]}
-          />
-        </section>
-      )}
-
-      {initial ? (
-        <MarketLive
-          key={initial.market.id}
-          initial={initial}
-          embedded
-          firstTable={markets.length > 1 ? 2 : 1}
-          beforeDiscussion={relatedPapers}
-        />
-      ) : (
-        relatedPapers
-      )}
+      {relatedPapers}
 
       <Citations citations={citations} />
 
@@ -318,13 +177,4 @@ function reportHref(title: string, url: string): string {
   const short = title.length > 60 ? `${title.slice(0, 59).trimEnd()}…` : title;
   const body = `${title}\n${url}\n\nWhat's the problem?\n`;
   return `mailto:${REPORT_EMAIL}?subject=${encodeURIComponent(`[Issue] ${short}`)}&body=${encodeURIComponent(body)}`;
-}
-
-/** The headline (`lib/headline.ts`). Settled: the winner. Void: a dash. */
-function headline(v: MarketView): string {
-  if (v.market.status === 'settled') {
-    return v.outcomes.find((o) => o.id === v.market.resolvedOutcomeId)?.label ?? 'settled';
-  }
-  const h = marketHeadline({ ...v.market, outcomes: v.outcomes });
-  return h === null ? '—' : pct(h);
 }

@@ -13,20 +13,90 @@
       }
       body {
         display: flex;
-        align-items: center;
-        justify-content: center;
+        flex-direction: column;
         padding: 0 16px;
         background: #fbfaf7;
         color: #1d1d1d;
-        font:
-          18px/1.5 Georgia,
-          'Times New Roman',
-          serif;
+        font-family: Georgia, 'Times New Roman', serif;
         text-align: center;
+      }
+      main {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        flex-direction: column;
+        justify-content: center;
+        gap: 24px;
+      }
+      h1 {
+        margin: 0;
+        font: inherit;
+        font-size: 44px;
+      }
+      /* The header's wordmark (components/Wordmark): "accept" in ink, "odds" in the accent. */
+      main i {
+        font-style: normal;
+        color: #b31b1b;
+      }
+      /* The first-trade page's X share button (components/ShareButtons). */
+      .x {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 16px;
+        background: #000;
+        color: #fff;
+        font:
+          600 14px/normal -apple-system,
+          'Segoe UI',
+          Helvetica,
+          Arial,
+          sans-serif;
+        text-decoration: none;
+      }
+      .x:hover {
+        opacity: 0.9;
+      }
+      .x svg {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
+      }
+      .updates p {
+        margin: 0 0 8px;
+        color: #777;
+        font-size: 15px;
+      }
+      footer {
+        padding: 16px 0;
+        font-size: 13px;
+      }
+      footer a {
+        color: #777;
+        text-decoration: none;
       }
     </style>
   </head>
   <body>
-    <p>Trading has been paused. Please check back later</p>
+    <main>
+      <h1>accept<i>odds</i></h1>
+      <div class="updates">
+        <p>For updates:</p>
+        <a
+          class="x"
+          href="https://x.com/uptosomestuff/status/2110108404882551209"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"
+            />
+          </svg>
+          Follow on X
+        </a>
+      </div>
+    </main>
+    <footer><a href="mailto:mail@acceptodds.com">mail@acceptodds.com</a></footer>
   </body>
 </html>

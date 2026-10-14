@@ -1,32 +1,13 @@
-import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
-import { RememberVenue } from '@/components/RememberVenue';
-import { ui } from '@/components/ui';
 import { ApiError } from '@/server/api/errors';
-import { viewerFromHeaders } from '@/server/auth';
-import { currentVenue } from '@/server/current-venue';
-import { shareSubject, siteName } from '@/server/share';
 import { resolveListing, resolveMarket } from '@/server/views';
-import { loadMarketLive } from './load';
-import { MarketLive } from './MarketLive';
 
 export const dynamic = 'force-dynamic';
 
-/** The link preview's text for a market with no listing (a listed one redirects to its paper). */
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const subject = await shareSubject(decodeURIComponent((await params).slug));
-  if (!subject || subject.listing) return {};
-  const description = 'See the odds, and trade on them.';
-  return {
-    title: `${subject.title} | ${siteName()}`,
-    description,
-    alternates: { canonical: subject.path },
-    openGraph: { title: subject.title, description, url: subject.path, siteName: siteName() },
-    twitter: { card: 'summary_large_image', title: subject.title, description },
-  };
-}
-
+/**
+ * Safe for work edition: there is no market page. A market in a listing
+ * sends its old links on to the paper; one with no listing is not shown.
+ */
 export default async function MarketPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   let market;
@@ -36,22 +17,7 @@ export default async function MarketPage({ params }: { params: Promise<{ slug: s
     if (err instanceof ApiError && err.status === 404) notFound();
     throw err;
   }
-  if (market.status === 'draft') notFound();
-
-  // A market in a listing lives on its listing's page.
-  if (market.listingId) {
-    const listing = await resolveListing(market.listingId);
-    redirect(`/papers/${encodeURIComponent(listing.slug)}?market=${encodeURIComponent(market.slug)}`);
-  }
-
-  const viewer = await viewerFromHeaders(await headers());
-  const initial = await loadMarketLive(market, viewer);
-
-  return (
-    <main className={ui.page}>
-      {/* The market's venue becomes the navbar's, so the wallet shown is the one the trade box spends. */}
-      <RememberVenue kind={market.kind} stale={market.kind !== (await currentVenue())} />
-      <MarketLive initial={initial} />
-    </main>
-  );
+  if (!market.listingId) notFound();
+  const listing = await resolveListing(market.listingId);
+  redirect(`/papers/${encodeURIComponent(listing.slug)}`);
 }

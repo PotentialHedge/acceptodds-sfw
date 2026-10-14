@@ -1,3 +1,51 @@
+# acceptodds — Safe for work edition
+
+**The Safe for work edition** of acceptodds: the papers without the markets.
+It keeps the paper list, search, the paper map, related papers, citations,
+follows, reading groups and recommendations, and drops everything that
+trades, prices, values or ranks: no markets, odds, bets, reputation,
+portfolio, leaderboard, public positions, comments or agent trading.
+
+It is a fork of `../platform` (branch `sfw`, remote `upstream`), on the same
+database schema, so it can run against a copy of the market edition's data
+and pull its fixes:
+
+```sh
+git fetch upstream && git merge upstream/master
+```
+
+### What changed from the market edition
+
+- **A first page, once per browser.** `src/proxy.ts` shows every page as
+  the gate (`app/gate/route.ts`, the market edition's maintenance page plus
+  a "Take me to the Safe for work edition →" button) until the browser has
+  the `sfw_entered` cookie. The button posts to `app/enter/route.ts`, which
+  sets the cookie for a year and goes on to the page first asked for. The
+  API, `/healthz` and the machine-read files are never gated.
+- **Market paths are 404s**, in the same proxy (`lib/sfw.ts`): the
+  leaderboard, portfolio, people, positions, first-trade, badge, about and
+  agent pages, and every API path that trades, values, ranks or comments.
+  `/markets/<slug>` redirects to its paper.
+- **No prices anywhere.** The home list sorts by `newest` (listing order) or
+  `popular` (views), plus `relevance` while searching and `recommended` when
+  signed in, with no status filter; rows have no odds, volume or sparkline.
+  The map has no odds colouring and its points carry no headline. A paper's
+  page is its title block, related papers with the minimap (never held back
+  behind a bet) and its citations.
+- **Reading groups have their own page**, `/groups/<id>` (the market edition
+  set them on the leaderboard).
+- **Sign-up is the sign-in link** on `/signin` (`/welcome`, the bet-first
+  onboarding, redirects there).
+
+The engine, schema and API code of the market edition are still here,
+unused, so merges from upstream stay small. Nothing in this edition writes
+market state.
+
+## The market edition
+
+What follows is the market edition's README, which still describes the
+shared code.
+
 # acceptodds — platform
 
 **Live at https://acceptodds.com.**

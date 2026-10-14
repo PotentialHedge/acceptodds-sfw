@@ -1,4 +1,8 @@
-# Staging: https://staging.acceptodds.com
+# Staging: https://staging.acceptodds.com — the Safe for work edition
+#
+# Same compose project (and so the same database volume) as the market
+# edition's staging; only the images are named apart, so the market
+# edition's staging image stays as it was.
 #
 # A second copy of production on the same host, for trying a build against a
 # copy of production's data. Same shared Traefik as docker-compose.prod.yml
@@ -62,7 +66,7 @@ services:
       # Shown by GET /api/v1/version; set it when building (see the header).
       args:
         GIT_COMMIT: ${GIT_COMMIT:-}
-    image: acceptodds-staging-app
+    image: acceptodds-sfw-staging-app
     restart: unless-stopped
     logging: *logging
     env_file: .env.staging
@@ -109,7 +113,7 @@ services:
     build:
       context: .
       target: tools
-    image: acceptodds-staging-tools
+    image: acceptodds-sfw-staging-tools
     profiles: [tools]
     env_file: .env.staging
     depends_on:

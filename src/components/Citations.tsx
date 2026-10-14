@@ -1,8 +1,5 @@
 import Link from 'next/link';
 import { bibOrder } from '@/lib/bibliography';
-import { pct } from '@/lib/format';
-import { headlineLabel, marketHeadline } from '@/lib/headline';
-import { likelihoodClass, marketLikelihood } from '@/lib/likelihood';
 import type { CitedListing, ListingCitations } from '@/server/views';
 import { AuthorList } from './AuthorList';
 import { MathText } from './MathText';
@@ -11,9 +8,7 @@ import { Bibliography } from './References';
 /**
  * A paper's back matter (#38): its bibliography, as `../research` supplied
  * it, and the papers here that cite it, both set as ICLR sets references
- * (`lib/bibliography.ts`). An entry that is a paper here links to its page
- * and shows its odds — the main market's headline, or the decision once
- * settled — in its likelihood colour.
+ * (`lib/bibliography.ts`). An entry that is a paper here links to its page.
  */
 export function Citations({ citations }: { citations: ListingCitations }) {
   const { citedBy, citedByTotal } = citations;
@@ -114,28 +109,6 @@ export function Entry({
           </a>
         </>
       )}
-      {cited?.main && <Odds main={cited.main} kind={cited.listing.kind} />}
     </>
-  );
-}
-
-function Odds({ main, kind }: { main: NonNullable<CitedListing['main']>; kind: string | null }) {
-  const m = { ...main.market, outcomes: main.outcomes };
-  const look = likelihoodClass(marketLikelihood(m));
-  let text: string;
-  if (main.market.status === 'settled') {
-    text = main.outcomes.find((o) => o.id === main.market.resolvedOutcomeId)?.label ?? 'settled';
-  } else {
-    const h = marketHeadline(m);
-    text =
-      h === null
-        ? '—'
-        : `${pct(h)} ${headlineLabel(
-            main.outcomes.map((o) => o.label),
-            kind,
-          )}`;
-  }
-  return (
-    <span className={`ml-1.5 rounded-[3px] px-1.5 font-mono text-[12px] whitespace-nowrap ${look.chip}`}>{text}</span>
   );
 }

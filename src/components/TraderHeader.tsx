@@ -63,13 +63,9 @@ function abstract(a: Parameters<typeof TraderHeader>[0]['account'], admin: boole
   ];
   // Bots trade without verification, so it says nothing about them.
   if (!a.isBot) {
-    parts.push(
-      a.verifiedAt
-        ? `Verified by institutional email on ${day(a.verifiedAt)}.`
-        : 'Not yet verified, so may browse the markets but not trade.',
-    );
+    parts.push(a.verifiedAt ? `Verified by institutional email on ${day(a.verifiedAt)}.` : 'Not yet verified.');
   }
-  if (admin) parts.push('Also an administrator, who can create, close and settle markets.');
+  if (admin) parts.push('Also an administrator.');
   return parts.join(' ');
 }
 

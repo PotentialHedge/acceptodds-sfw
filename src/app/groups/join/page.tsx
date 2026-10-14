@@ -5,7 +5,7 @@ import { Authors } from '@/components/Authors';
 import { JoinGroupButton, SignInToJoin } from '@/components/Groups';
 import { TitleBlock } from '@/components/TitleBlock';
 import { ui } from '@/components/ui';
-import { groupPath, institutionPath } from '@/lib/links';
+import { groupPath } from '@/lib/links';
 import { viewerFromHeaders } from '@/server/auth';
 import { groupByInviteCode, groupMembersOf, roleIn } from '@/server/groups';
 
@@ -37,7 +37,7 @@ export default async function JoinGroupPage({
         <TitleBlock title="Invite link not valid" />
         <p className="text-center">
           This link does not open any reading group. Its admin may have replaced it with a new one: ask them for the
-          current link. <Link href="/leaderboard">See the leaderboard</Link>.
+          current link. <Link href="/">See the papers</Link>.
         </p>
       </main>
     );
@@ -53,11 +53,9 @@ export default async function JoinGroupPage({
           <Authors
             authors={members.map((m) => ({
               name: m.displayName,
-              href: `/people/${encodeURIComponent(m.handle)}`,
               isBot: m.isBot,
               affiliations: m.institutions,
             }))}
-            affiliationHref={institutionPath}
           />
         }
         abstract={group.description}
@@ -65,13 +63,12 @@ export default async function JoinGroupPage({
         <div className="mt-4 flex flex-col items-center font-sans text-sm">
           {role ? (
             <p>
-              You are in this reading group. <Link href={groupPath(group.id)}>See its reading list and board →</Link>
+              You are in this reading group. <Link href={groupPath(group.id)}>See its reading list →</Link>
             </p>
           ) : viewer ? (
             <>
               <p className="mb-1 text-muted">
-                Everyone can add papers to its shared reading list and mark what they have read. Its members also have a
-                leaderboard of their own. You stay on the main leaderboard too.
+                Everyone can add papers to its shared reading list and mark what they have read.
               </p>
               <JoinGroupButton code={code} groupId={group.id} />
             </>

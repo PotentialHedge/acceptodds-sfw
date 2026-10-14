@@ -42,7 +42,6 @@ import {
   MARKET_READ_TTL_MS,
 } from './market-cache';
 import { mapCached } from './map-cache';
-import { pricedBeforeTradeKinds } from '@/venues';
 import { recommendationScores, scoresTable } from './recommendations';
 
 /**
@@ -589,7 +588,8 @@ export interface RelatedList {
  */
 export async function listingRelatedTo(
   listing: Listing,
-  { all = false }: { all?: boolean } = {},
+  // Safe for work edition: nothing is held back behind a bet, since there are none.
+  { all = true }: { all?: boolean } = {},
   database: Database = getDb(),
 ): Promise<RelatedList> {
   const [rows, [bet]] = await Promise.all([
@@ -669,9 +669,8 @@ function mapPointRows(kind: string, database: Database) {
         y: mapPoints.y,
         region: mapPoints.region,
         cluster: mapPoints.cluster,
-        headline: sql<
-          number | null
-        >`case when ${markets.status} = 'void' or (${markets.orderCount} = 0 and not ${kindIn(sql`${markets.kind}`, pricedBeforeTradeKinds())}) then null else round(${markets.headline}::numeric, 4)::float8 end`,
+        // Safe for work edition: no market prices anywhere, so no point carries a headline.
+        headline: sql<number | null>`null::float8`,
       })
       .from(mapPoints)
       // The venue in the join, so a caller's own `where` does not replace it.
@@ -1477,7 +1476,8 @@ export type MarketSort = (typeof MARKET_SORTS)[number];
  * is one. `recommended` needs `recommendFor` (`server/recommendations.ts`)
  * and is `activity` without it.
  */
-export type BrowseSort = MarketSort | 'relevance' | 'recommended';
+/** `popular` (most read) is the safe for work edition's, which sorts on nothing a market holds. */
+export type BrowseSort = MarketSort | 'relevance' | 'recommended' | 'popular';
 
 export interface BrowseRow {
   /** The listing this row stands for, or null for a market that has none. */
@@ -1658,15 +1658,6 @@ const ROW_KIND = sql`coalesce(m.kind, l.kind)`;
 const rowStatusIs = (status: string) =>
   status === 'open' ? sql`(m.status = 'open' or m.id is null)` : sql`m.status = ${status}`;
 const rowKindIs = (kind: string) => sql`(m.kind = ${kind} or (m.id is null and l.kind = ${kind}))`;
-/** `column` is one of `kinds`; false for none. */
-function kindIn(column: SQL, kinds: readonly string[]): SQL {
-  return kinds.length === 0
-    ? sql`false`
-    : sql`${column} in (${sql.join(
-        kinds.map((k) => sql`${k}`),
-        sql`, `,
-      )})`;
-}
 
 /** Volume and fills over the row's markets; 0 before any. */
 const ROW_VOLUME = sql`(coalesce(m.volume_micro, 0) + coalesce(sec.volume_micro, 0))`;
@@ -1756,10 +1747,12 @@ function browseQuery(q: BrowseFilter): { from: SQL; order: SQL[]; searching: boo
   // venue that sets its own opening price shows it from the start (`venues/`).
   // Recommended papers first, best first, even one with no price yet; then the rest by activity.
   const recommending = q.sort === 'recommended' && q.recommendScores?.size ? q.recommendScores : null;
-  const activity = [sql`greatest(m.last_trade_at, sec.last_trade_at) desc nulls last`];
+  // Safe for work edition: no market decides an order. Listings sort as they were listed (`short_id`
+  // comes from one sequence) or by how many read them; rows with a price no longer come first.
+  const popular = [sql`l.view_count desc nulls last`, sql`l.short_id desc nulls last`];
+  const activity = popular;
   const order = [
     ...(recommending ? [sql`rec.score desc nulls last`] : []),
-    sql`(m.id is null or (m.order_count = 0 and not ${kindIn(sql`m.kind`, pricedBeforeTradeKinds())}))`,
     ...{
       closing: [sql`m.closes_at asc`],
       // Void has no headline, whatever the cache last held.
@@ -1770,8 +1763,9 @@ function browseQuery(q: BrowseFilter): { from: SQL; order: SQL[]; searching: boo
       volume: [sql`${ROW_VOLUME} desc`],
       activity,
       recommended: activity,
-      newest: [sql`m.created_at desc`],
-      relevance: tq ? [sql`hit.r desc`, sql`m.closes_at asc`] : [sql`m.closes_at asc`],
+      newest: [sql`l.short_id desc nulls last`],
+      popular,
+      relevance: tq ? [sql`hit.r desc`, sql`l.short_id desc nulls last`] : [sql`l.short_id desc nulls last`],
     }[q.sort],
   ];
 

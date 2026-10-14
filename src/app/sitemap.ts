@@ -10,7 +10,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const origin = siteUrl();
   // One map per venue that has one.
   const maps = (await mapKinds()).map((kind) => `/map?${new URLSearchParams({ kind })}`);
-  const fixed = ['/', '/about', '/leaderboard', ...maps, '/docs', '/privacy'].map((path) => ({
+  const fixed = ['/', ...maps, '/docs', '/privacy'].map((path) => ({
     url: `${origin}${path === '/' ? '' : path}`,
     changeFrequency: 'daily' as const,
   }));

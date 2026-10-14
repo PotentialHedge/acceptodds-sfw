@@ -252,9 +252,7 @@ export function ReadEye({
         ) : (
           <ul className="max-h-48 overflow-y-auto">
             {status.readers.map((p) => (
-              <li key={p.accountId}>
-                <Link href={`/people/${encodeURIComponent(p.handle)}`}>{p.displayName}</Link>
-              </li>
+              <li key={p.accountId}>{p.displayName}</li>
             ))}
           </ul>
         )}
