@@ -7,6 +7,9 @@
 /** Set once a visitor has gone past the gate (`/enter`); its absence shows the gate. */
 export const ENTERED_COOKIE = 'sfw_entered';
 
+/** The page asked for, from `proxy.ts` to the gate it rewrote the request to. */
+export const NEXT_HEADER = 'x-sfw-next';
+
 /** A year: the gate is shown once per browser, not once per visit. */
 export const ENTERED_MAX_AGE = 60 * 60 * 24 * 365;
 

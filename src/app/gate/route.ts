@@ -1,4 +1,5 @@
 import { safeReturnTo } from '@/lib/return-to';
+import { NEXT_HEADER } from '@/lib/sfw';
 
 /**
  * The gate (`proxy.ts` rewrites every page here until a browser has gone
@@ -8,7 +9,7 @@ import { safeReturnTo } from '@/lib/return-to';
  * page that was asked for.
  */
 export async function GET(request: Request) {
-  const next = safeReturnTo(new URL(request.url).searchParams.get('next') ?? undefined);
+  const next = safeReturnTo(request.headers.get(NEXT_HEADER));
   const escaped = next.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   return new Response(PAGE.replace('__NEXT__', escaped), {
     headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { ENTERED_COOKIE, MARKET_API, MARKET_PAGES, under } from './lib/sfw';
+import { ENTERED_COOKIE, MARKET_API, MARKET_PAGES, NEXT_HEADER, under } from './lib/sfw';
 
 /**
  * The safe for work edition's front door. Two jobs, before any route runs:
@@ -32,8 +32,11 @@ export function proxy(request: NextRequest) {
   if (request.cookies.has(ENTERED_COOKIE) || request.method !== 'GET') return NextResponse.next();
   const gate = request.nextUrl.clone();
   gate.pathname = '/gate';
-  gate.search = `?${new URLSearchParams({ next: `${pathname}${search}` })}`;
-  return NextResponse.rewrite(gate);
+  gate.search = '';
+  // The page asked for goes to the gate in a header: a rewrite's own query does not reach the route's URL.
+  const forwarded = new Headers(request.headers);
+  forwarded.set(NEXT_HEADER, `${pathname}${search}`);
+  return NextResponse.rewrite(gate, { request: { headers: forwarded } });
 }
 
 export const config = {
