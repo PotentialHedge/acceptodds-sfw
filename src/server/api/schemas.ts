@@ -184,8 +184,7 @@ const ListingFields = {
   links: z.array(ListingLink),
   kind: z.string().nullable().meta({ description: 'Opaque to the venue; whatever the creating client groups by.' }),
   closedAt: Timestamp.nullable().meta({
-    description:
-      'When the creating client closed it (`PUT /listings/{id}/closed`), else `null`. No new market opens on a closed listing; its existing markets are unaffected.',
+    description: 'When the creating client closed it (`PUT /listings/{id}/closed`), else `null`.',
   }),
   createdAt: Timestamp,
 };
@@ -195,17 +194,13 @@ export const Listing = z
     ...ListingFields,
     followers: z.number().int().min(0).meta({ description: 'How many accounts follow this listing. Never who.' }),
     views: z.number().int().min(0).meta({ description: 'Unique viewers per day, summed over every day so far.' }),
-    markets: z.array(Market).meta({
-      description: 'Its markets, drafts excluded, by `listingRank` ascending: the first is the main market.',
-    }),
   })
   .meta({
     id: 'Listing',
-    description:
-      'An opaque subject that markets are grouped under, supplied whole by the creating client. The venue never fetches or interprets any of it.',
+    description: 'A paper, supplied whole by the creating client. The site never fetches or interprets any of it.',
   });
 
-/** A listing as cited or citing (#38): enough to name it, and its main market for the odds. */
+/** A listing as cited, citing or related: enough to name it. */
 export const CitedListing = z
   .object({
     id: Id,
@@ -213,7 +208,6 @@ export const CitedListing = z
     title: z.string(),
     authors: z.array(z.string()),
     kind: z.string().nullable(),
-    market: Market.nullable().meta({ description: 'Its main market; `null` when it has no visible one.' }),
   })
   .meta({ id: 'CitedListing' });
 
@@ -250,10 +244,6 @@ export const ListingRelated = z
     related: z
       .array(CitedListing)
       .meta({ description: 'Best match first. Entries with no listing here are left out.' }),
-    hidden: z.number().int().min(0).meta({
-      description:
-        'How many more were named but are not sent: until the listing has a bet, only the first 3 are. A bet on any of its markets shows the rest.',
-    }),
   })
   .meta({
     id: 'ListingRelated',
@@ -277,10 +267,6 @@ const MapPoint = z
     y: z.number(),
     region: z.number().int().nullable(),
     cluster: z.number().int().nullable(),
-    headline: z.number().nullable().meta({
-      description:
-        'The main market’s headline price (accepted in any form, for a paper); 1/0 once settled; `null` when void or there is no market. A price, never a value.',
-    }),
   })
   .meta({ id: 'MapPoint' });
 
@@ -290,7 +276,7 @@ const column = <T extends z.ZodType>(item: T, description: string) => z.array(it
 export const MapQuery = z.object({
   kind: Kind.optional().meta({
     description:
-      'The venue (a market `kind`) whose map to read. Each venue has its own map, or none. Defaults to the site’s default venue.',
+      'The venue (a listing `kind`) whose map to read. Each venue has its own map, or none. Defaults to the site’s default venue.',
     example: 'ICLR 2027',
   }),
 });
@@ -308,10 +294,6 @@ export const PaperMap = z
     cluster: column(z.number().int().nullable(), 'Fine grouping (`clusters`).'),
     area: column(z.number().int().min(0).nullable(), 'Index into `areas` of the listing’s primary area.'),
     areas: column(z.string(), 'The distinct primary areas, sorted.'),
-    headline: column(
-      z.number().nullable(),
-      'The main market’s headline price (accepted in any form, for a paper); 1/0 once settled; `null` when void or there is no market. A price, never a value.',
-    ),
     regions: z.array(MapTopic).meta({ description: 'Names of the coarse groupings.' }),
     clusters: z.array(MapTopic).meta({ description: 'Names of the fine groupings.' }),
   })
@@ -465,7 +447,6 @@ export const FollowedListing = z
   .object({
     listing: Listing,
     followedAt: Timestamp,
-    headline: HeadlineMove.nullable().meta({ description: '`null` when the listing has no visible market.' }),
   })
   .meta({ id: 'FollowedListing' });
 
@@ -639,7 +620,7 @@ export const ListingFill = Fill.extend({
 
 const Institutions = z.array(z.string()).meta({
   description:
-    'Every institution the trader has a confirmed email address at, the one they signed up with first. Empty for a bot or an unverified account.',
+    'Every institution the account has a confirmed email address at, the one it signed up with first. Empty for an unverified account.',
 });
 
 export const SettledRecord = z
@@ -800,9 +781,6 @@ export const PublicAccount = z
     rorId: z.string().nullable(),
     verifiedAt: Timestamp.nullable(),
     createdAt: Timestamp,
-    settledRecords: z.array(SettledRecord).meta({
-      description: 'One per venue the trader has traded in, venues by name.',
-    }),
   })
   .meta({ id: 'PublicAccount' });
 
@@ -823,17 +801,9 @@ export const Me = z
     verifiedAt: Timestamp.nullable().meta({
       description: 'When the first of your current institutional email addresses was confirmed; null when none is.',
     }),
-    canTrade: z.boolean().meta({
-      description:
-        'True for a verified account or a bot. Unverified accounts may browse and quote but not place orders.',
-    }),
-    wallets: z.array(WalletBalance).meta({
-      description:
-        'Your reputation, one wallet per venue, venues by name. Your first trade in a venue opens its wallet with the starting balance; a venue not listed has none yet.',
-    }),
     createdAt: Timestamp,
     digestOptIn: z.boolean().meta({
-      description: 'Whether the daily email about followed papers whose price moved may be sent to you. On by default.',
+      description: 'Whether the daily email about followed papers may be sent to you. On by default.',
     }),
     mentionMailOptIn: z.boolean().meta({
       description: 'Whether you are emailed when a comment `@`-mentions your alias. On by default.',
@@ -987,7 +957,7 @@ export const UpdateMeRequest = z
       .optional()
       .meta({ description: 'Turn the email on or off that a comment mentioning you sends.' }),
     displayName: z.string().trim().min(1).max(100).optional().meta({
-      description: 'The name shown for you on the leaderboard and your public page. Your handle does not change.',
+      description: 'The name shown for you in your groups. Your handle does not change.',
     }),
   })
   .strict()
@@ -1000,7 +970,8 @@ export const CreateTokenRequest = z
       .array(z.enum(['read', 'trade']))
       .min(1)
       .meta({
-        description: 'A signed-in user may mint `read` and `trade` tokens. `admin` is issued by an operator only.',
+        description:
+          'A signed-in user may mint `read` tokens (`trade` is still accepted and grants nothing more). `admin` is issued by an operator only.',
       }),
   })
   .meta({ id: 'CreateTokenRequest' });
@@ -1193,7 +1164,7 @@ export const SetTextRequest = z
   .object({
     text: z.string().max(FULL_TEXT_MAX).nullable().meta({
       description:
-        'The full text of the subject (for a paper, its extracted PDF). Read to set a new market’s opening prices, and served to signed-in clients by `GET /listings/{id}/text`. `null` or empty clears it.',
+        'The full text of the subject (for a paper, its extracted PDF), served to signed-in clients by `GET /listings/{id}/text`. `null` or empty clears it.',
     }),
     source: TextSource.nullish().meta({
       description:
@@ -1249,7 +1220,7 @@ export const SetMapRequest = z
   .object({
     kind: Kind.meta({
       description:
-        'The venue (a market `kind`) this is the map of. Only its map is replaced; every other venue’s is kept.',
+        'The venue (a listing `kind`) this is the map of. Only its map is replaced; every other venue’s is kept.',
       example: 'ICLR 2027',
     }),
     points: z

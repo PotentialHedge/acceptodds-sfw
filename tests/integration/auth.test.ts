@@ -95,8 +95,6 @@ describe('sign-up', () => {
       isBot: false,
       institutions: ['Example University'],
       verifiedAt: expect.any(String),
-      canTrade: true,
-      wallets: [],
       auth: { method: 'session', scopes: ['read', 'trade'] },
     });
 
@@ -268,7 +266,7 @@ describe('confirming with the code from the mail', () => {
     expect(cookie).toContain('session_token=');
 
     const me = await api('GET', '/me', { cookie });
-    expect(me.body).toMatchObject({ canTrade: true, wallets: [] });
+    expect(me.body).not.toHaveProperty('wallets');
     const grants = await db.select().from(ledgerEntries).where(eq(ledgerEntries.accountId, me.body.id));
     expect(grants).toHaveLength(0);
 
@@ -424,7 +422,7 @@ describe('the institution allowlist', () => {
   it('admits subdomains of a listed domain, and records the institution', async () => {
     const cookie = await signUp('grace@inf.ethz.ch', 'Grace');
     const me = await api('GET', '/me', { cookie });
-    expect(me.body).toMatchObject({ institutions: ['ETH Zurich'], canTrade: true });
+    expect(me.body).toMatchObject({ institutions: ['ETH Zurich'] });
     const profile = await api('GET', `/accounts/${me.body.handle}`);
     expect(profile.body).toMatchObject({ institutions: ['ETH Zurich'], verifiedAt: expect.any(String) });
   });
@@ -441,7 +439,7 @@ describe('the institution allowlist', () => {
     const cookie = cookieFrom(verified);
 
     const me = await api('GET', '/me', { cookie });
-    expect(me.body).toMatchObject({ canTrade: false, verifiedAt: null, institutions: [] });
+    expect(me.body).toMatchObject({ verifiedAt: null, institutions: [] });
     const res = await api('POST', `/markets/${fx.marketId}/orders`, { cookie, body: order(fx.outcomeIds[0]) });
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('not_verified');

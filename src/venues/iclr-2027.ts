@@ -5,15 +5,6 @@ import type { Venue } from './types';
 export const ICLR_2027: Venue = {
   kind: 'ICLR 2027',
 
-  homeTitle: 'Which papers will get accepted at ICLR 2027?',
-  cardTitle: 'Which papers will get accepted?',
-  lede: 'A prediction market on peer review',
-  marketOn: 'its decision (accept or reject)',
-  settlesWhen: 'the venue publishes its decisions',
-  unaffiliated: ['ICLR', 'OpenReview'],
-  cardQuestion: { predicate: 'be accepted', suffix: '@ ICLR 2027?' },
-  cardNote: 'your paper?',
-
   runningHead: 'Under review as a conference paper at ICLR 2027',
   headlineLabel: 'accept',
   chanceOf: 'this paper gets accepted at ICLR 2027',

@@ -8,16 +8,6 @@ import type { Venue } from './types';
 export const OPENAI_MATH: Venue = {
   kind: 'OpenAI Math',
 
-  homeTitle: 'Which OpenAI Math results will hold up?',
-  cardTitle: 'Which results will be verified?',
-  lede: 'A prediction market on AI-written mathematics',
-  marketOn: 'whether its main result is independently verified by the end of 2027',
-  settlesWhen: 'its result is verified, or at the end of 2027',
-  unaffiliated: ['OpenAI'],
-  abstract:
-    "A prediction market on OpenAI's recent math results. OpenAI recently stunned the mathematics community by releasing over 700 manuscripts addressing many open problems in mathematics. The results were released without formal peer review, and their quality remains unclear. At the time of writing, three of them have been withdrawn. This platform is an attempt to crowdsource the review of these results and to spark a discussion on the role of AI in mathematics. Each manuscript has a market on whether its main result is independently verified by the end of 2027, priced by the community, who stake $rep (an in-app currency) on what they expect. Everyone who signs up receives {balance} to trade with in each venue. Prices are probabilities, and every market settles when its result is verified, or at the end of 2027. This is an extension of the original site for ICLR submissions.",
-  cardQuestion: { predicate: 'be verified', suffix: 'by 2027?' },
-
   runningHead: 'Preprint in the OpenAI Math release',
   headlineLabel: 'verified',
   chanceOf: 'this result is independently verified by the end of 2027',

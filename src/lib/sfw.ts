@@ -17,16 +17,10 @@ export const ENTERED_MAX_AGE = 60 * 60 * 24 * 365;
  * Pages of the market edition with no place here. A request for one is a
  * 404, whatever the page's code would still do.
  */
-export const MARKET_PAGES = [
-  '/about',
-  '/leaderboard',
-  '/portfolio',
-  '/people',
-  '/positions',
-  '/first-trade',
-  '/badge',
-  '/agent',
-];
+export const MARKET_PAGES = ['/leaderboard', '/portfolio', '/people', '/positions', '/first-trade', '/badge', '/agent'];
+
+/** Pages of the market edition that send a visitor to the home page instead (a 307). */
+export const REDIRECT_PAGES = ['/about'];
 
 /**
  * API paths that trade, value or rank, or serve agents that trade: 404. A

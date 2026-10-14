@@ -32,9 +32,7 @@ import { listingCitations, listingRelatedTo, listingView, onMap, resolveListing 
 export const dynamic = 'force-dynamic';
 
 /**
- * The link preview's text (issue #11 §1): the title as a question and no
- * numbers — the image shows which way it leans, the page how far. The image
- * is `opengraph-image.tsx`, which Next adds by itself.
+ * The link preview's text: the title and the abstract, with no image.
  */
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const subject = await shareSubject(decodeURIComponent((await params).slug));
