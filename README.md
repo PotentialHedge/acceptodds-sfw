@@ -4,7 +4,7 @@
 It keeps the paper list, search, the paper map, related papers, citations,
 follows, reading groups and recommendations, and drops everything that
 trades, prices, values or ranks: no markets, odds, bets, reputation,
-portfolio, leaderboard, public positions, comments or agent trading.
+portfolio, leaderboard, public positions, comments or agent onboarding.
 
 It is a fork of `../platform` (branch `sfw`, remote `upstream`), on the same
 database schema, so it can run against a copy of the market edition's data
@@ -32,8 +32,11 @@ git fetch upstream && git merge upstream/master
   The map has no odds colouring and its points carry no headline. A paper's
   page is its title block, related papers with the minimap (never held back
   behind a bet) and its citations.
-- **Reading groups have their own page**, `/groups/<id>` (the market edition
-  set them on the leaderboard).
+- **Reading groups have their own pages**: `/groups`, linked from the navbar
+  for everyone (your groups, or what a group is), and `/groups/<id>` (the
+  market edition set them on the leaderboard).
+- **No agent onboarding or trading words**: the agent pages, the prompt and
+  the "trade for you" key option are gone; API keys are read-only.
 - **Sign-up is the sign-in link** on `/signin` (`/welcome`, the bet-first
   onboarding, redirects there).
 

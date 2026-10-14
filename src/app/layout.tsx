@@ -6,8 +6,6 @@ import { AuthNavLink } from '@/components/AuthLinks';
 import { ConfirmBanner } from '@/components/ConfirmBanner';
 import { HomeLink } from '@/components/HomeLink';
 import { LogoMark } from '@/components/Logo';
-import { NavGroups } from '@/components/NavGroups';
-import { groupsOf } from '@/server/groups';
 import { NameBanner } from '@/components/NameBanner';
 import { PendingGroupJoin } from '@/components/PendingGroupJoin';
 import { viewerFromHeaders } from '@/server/auth';
@@ -50,8 +48,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const [kind, kinds, mapped] = await Promise.all([currentVenue(), marketKinds(), mapKinds()]);
   // Each venue has its own map, or none: no link to a map that is not there.
   const hasMap = mapped.includes(kind);
-  const memberships = viewer ? await groupsOf(viewer.account.id) : [];
-  const readingGroups = memberships.map(({ group }) => ({ id: group.id, name: group.name }));
   const tracker = analytics();
   return (
     <html lang="en">
@@ -82,7 +78,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           >
             {/* Safe for work edition: no leaderboard, portfolio or net worth. */}
             {hasMap && <Link href="/map">map</Link>}
-            <NavGroups groups={readingGroups} />
+            {/* For everyone: signed out, the page says what a group is. */}
+            <Link href="/groups">groups</Link>
             {viewer ? <Link href="/profile">profile</Link> : <AuthNavLink />}
           </nav>
         </header>

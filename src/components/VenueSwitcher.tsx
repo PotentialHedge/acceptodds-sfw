@@ -6,23 +6,6 @@ import { pageHasVenue, rememberVenue } from '@/lib/venue';
 import { Popover, PopoverContent, PopoverTrigger } from './Popover';
 import { ui } from './ui';
 
-const PROPOSE_MARKET_EMAIL = 'market@acceptodds.com';
-const PROPOSE_MARKET_HREF = `mailto:${PROPOSE_MARKET_EMAIL}?${new URLSearchParams({
-  subject: 'Market proposal',
-  body: [
-    'Hi,',
-    '',
-    'I would like to propose a market:',
-    '',
-    'What would people bet on: ',
-    'How and when it resolves: ',
-    '',
-    'Thanks,',
-  ].join('\n'),
-})
-  .toString()
-  .replaceAll('+', '%20')}`;
-
 /**
  * The navbar's venue, beside the logo: the one every venue-less page shows
  * (`currentVenue()`), and so the wallet, curve and board the viewer is in
@@ -72,7 +55,6 @@ export function VenueSwitcher({ current, kinds }: { current: string; kinds: stri
         </span>
       </PopoverTrigger>
       <PopoverContent menu align="start" className="max-w-72 font-serif">
-        <p className="py-1 font-sans text-xs text-subtle">Each venue has its own wallet and leaderboard.</p>
         {options.map((k) => (
           <button
             key={k}
@@ -84,12 +66,6 @@ export function VenueSwitcher({ current, kinds }: { current: string; kinds: stri
             {k}
           </button>
         ))}
-        <a
-          href={PROPOSE_MARKET_HREF}
-          className="mt-1 border-t border-rule pt-2 font-sans text-sm text-subtle underline hover:text-accent narrow:min-h-11"
-        >
-          Propose a market
-        </a>
       </PopoverContent>
     </Popover>
   );

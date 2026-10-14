@@ -1,8 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { OnboardAgent } from '@/components/OnboardAgent';
-import { AGENT_KEY_NAME } from '@/lib/agent-prompt';
 import { CopyField } from '@/components/CopyField';
 import { ui } from '@/components/ui';
 import { day } from '@/lib/format';
@@ -34,10 +32,9 @@ async function errorText(res: Response): Promise<string> {
  * characters. Revoked keys are left out. Writes go through `/api/v1/me/tokens`,
  * which takes a session and never a key, so a key cannot mint its successor.
  */
-export function ApiKeys({ initial, n, canTrade }: { initial: ApiKeyRow[]; n: number; canTrade: boolean }) {
+export function ApiKeys({ initial, n }: { initial: ApiKeyRow[]; n: number }) {
   const [rows, setRows] = useState(initial.filter((r) => r.enabled));
   const [name, setName] = useState('');
-  const [trade, setTrade] = useState(true);
   const [secret, setSecret] = useState<{ name: string; token: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -71,7 +68,7 @@ export function ApiKeys({ initial, n, canTrade }: { initial: ApiKeyRow[]; n: num
         fetch('/api/v1/me/tokens', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ name: keyName, scopes: trade ? ['read', 'trade'] : ['read'] }),
+          body: JSON.stringify({ name: keyName, scopes: ['read'] }),
         }),
       async (res) => {
         const created = await res.json();
@@ -165,22 +162,8 @@ export function ApiKeys({ initial, n, canTrade }: { initial: ApiKeyRow[]; n: num
             mint key
           </button>
         </div>
-        <label className="mt-1.5 flex items-baseline gap-1.5">
-          <input type="checkbox" checked={trade} onChange={(e) => setTrade(e.target.checked)} />
-          <span>
-            Allow trading
-            {!canTrade && <span className="text-muted"> (it will work once you confirm an institutional address)</span>}
-          </span>
-        </label>
       </form>
       {note && <div className={ui.note(note.ok)}>{note.text}</div>}
-      <div className="mt-4">
-        <p className="mb-1 text-[15px] text-subtle">
-          Or let an AI agent trade for you: this copies a prompt for it with a one-time code, which gets it a key named{' '}
-          {AGENT_KEY_NAME}.
-        </p>
-        <OnboardAgent signedIn />
-      </div>
     </div>
   );
 }

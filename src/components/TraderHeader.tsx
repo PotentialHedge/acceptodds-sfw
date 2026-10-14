@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { Account } from '@/db/schema';
 import { day } from '@/lib/format';
@@ -38,9 +37,7 @@ export function TraderHeader({
           {a.institutions.map((name, i) => (
             <span key={name}>
               {i === 0 ? ', ' : '; '}
-              <Link href={`/leaderboard?institution=${encodeURIComponent(name)}`}>
-                <i>{name}</i>
-              </Link>
+              <i>{name}</i>
             </span>
           ))}
         </>
@@ -58,7 +55,7 @@ function abstract(a: Parameters<typeof TraderHeader>[0]['account'], admin: boole
   const at = a.institutions.length ? ` of ${andList(a.institutions)}` : '';
   const parts = [
     a.isBot
-      ? `${a.displayName} is a bot, trading since ${day(a.createdAt)}.`
+      ? `${a.displayName} is a bot, here since ${day(a.createdAt)}.`
       : `${a.displayName} is a member ${at}, here since ${day(a.createdAt)}.`,
   ];
   // Bots trade without verification, so it says nothing about them.

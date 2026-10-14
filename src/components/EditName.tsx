@@ -67,7 +67,7 @@ export function EditName({
       <ModalContent title="Edit name">
         <form onSubmit={save}>
           <label htmlFor="display-name" className="mb-1 block text-muted">
-            The name shown on the leaderboard and your public page
+            The name your reading groups see
           </label>
           <input
             id="display-name"

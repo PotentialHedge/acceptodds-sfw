@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { TitleBlock } from '@/components/TitleBlock';
 import { ui } from '@/components/ui';
 import { siteName } from '@/server/share';
@@ -27,7 +26,7 @@ export default function PrivacyPage() {
       <TitleBlock
         title="Privacy"
         byline={siteName()}
-        abstract="acceptodds stores what it needs to run accounts and markets, and little else. It sets no advertising or tracking cookies, sells nothing, and counts visits without knowing who made them. This page lists what is stored, why, who else handles it, and how to have it changed or removed."
+        abstract="acceptodds stores what it needs to run accounts, and little else. It sets no advertising or tracking cookies, sells nothing, and counts visits without knowing who made them. This page lists what is stored, why, who else handles it, and how to have it changed or removed."
       />
 
       <h2 id="who" className={ui.groupHeading}>
@@ -51,15 +50,16 @@ export default function PrivacyPage() {
         <ul className={list}>
           <li>
             your email address and any further institutional addresses you confirm, and the institutions they belong to,
-            to sign you in and to check that you may trade;
+            to sign you in and to show your institution;
           </li>
           <li>your display name, your handle and, if you set one, a hash of your password (never the password);</li>
           <li>
             sign-in sessions (not the network address or browser they came from), and a hash of each API key you create;
           </li>
           <li>
-            your trades, positions and $rep balance, the comments you post and the papers you follow, group, back or
-            mark as read: the site itself.
+            the papers you follow, the reading groups you are in and what you add to them or mark as read: the site
+            itself. Trades, positions and comments made on the market edition of acceptodds are still held, and shown
+            nowhere here.
           </li>
         </ul>
         <p>
@@ -80,10 +80,8 @@ export default function PrivacyPage() {
       </h2>
       <div className={prose}>
         <p>
-          Your display name, handle, institutions, rank and net worth appear on the leaderboard and on your page at{' '}
-          <span className="font-mono">/people/&lt;handle&gt;</span>. Comments are shown under a random alias per paper,
-          with your current position in that market, rounded to two figures, never your name. A position is public only
-          if you make it so, one at a time. Your email address is never shown to anyone else.
+          Your display name, handle and institutions are shown to the members of reading groups you join, and with the
+          group’s page to anyone who has its link. Your email address is never shown to anyone else.
         </p>
       </div>
 
@@ -92,10 +90,8 @@ export default function PrivacyPage() {
       </h2>
       <div className={prose}>
         <p>
-          We send the mail the site needs (confirmation codes, sign-in links, password resets, codes for an AI agent you
-          ask to sign in) and, unless you turn them off on your profile, a morning digest of the papers you follow and a
-          note when someone mentions you in a comment. Mail is delivered by Resend, which handles your address for that
-          purpose only.
+          We send only the mail the site needs: confirmation codes, sign-in links and password resets. Mail is delivered
+          by Resend, which handles your address for that purpose only.
         </p>
       </div>
 
@@ -105,7 +101,7 @@ export default function PrivacyPage() {
       <div className={prose}>
         <ul className={list}>
           <li>
-            <b>Analytics.</b> We count page views, a few product events (such as “a trade was placed”) and how fast
+            <b>Analytics.</b> We count page views, a few product events (such as “a paper was followed”) and how fast
             pages load (load and response times, layout shift) with Umami, run on our own server. It sets no cookies and
             stores no IP address; addresses are used only in passing, to tell visits apart and to find a country. Page
             addresses are stripped of anything personal before they are sent, and events never carry an email, name,
@@ -117,8 +113,8 @@ export default function PrivacyPage() {
             two days. Which paper was read after which is kept only as a total per pair of papers.
           </li>
           <li>
-            <b>Activity log.</b> We log which pages and markets signed-in accounts look at, to run and improve the site.
-            The log holds no content of what you did, only that it happened.
+            <b>Activity log.</b> We log which pages signed-in accounts look at, to run and improve the site. The log
+            holds no content of what you did, only that it happened.
           </li>
           <li>
             <b>Cloudflare</b> sits in front of the site, protects it from abuse and so sees every visitor’s network
@@ -127,10 +123,9 @@ export default function PrivacyPage() {
           <li>
             <b>Cookies and browser storage</b> are only functional: the sign-in session, whether you have gone past the
             first page (the way into the safe for work edition), whether you have seen the welcome page, which venue you
-            last picked, which home-page sections you left open, which announcements you dismissed, and a random token
-            that ties a bet chosen during sign-up to this browser. Your browser’s own storage remembers a pending
-            confirmation, the last paper you read and, for each tab, your last home-page search. None of it tracks you
-            elsewhere.
+            last picked, which home-page sections you left open and which announcements you dismissed. Your browser’s
+            own storage remembers a pending confirmation, the last paper you read and, for each tab, your last home-page
+            search. None of it tracks you elsewhere.
           </li>
         </ul>
         <p>
@@ -144,10 +139,9 @@ export default function PrivacyPage() {
       </h2>
       <div className={prose}>
         <p>
-          We may study how the markets behave (how prices moved, how accurate they were, how people and AI agents trade)
-          and publish what we find, in a blog post or a scientific paper. Anything published is aggregated or
-          anonymised: never an email address, and never a name, handle or comment alias tied to what someone did. Market
-          prices, volumes and outcomes, which are public already, may be shown as they are.
+          We may study how the site is used (which papers are read, followed and listed together) and publish what we
+          find, in a blog post or a scientific paper. Anything published is aggregated or anonymised: never an email
+          address, and never a name or handle tied to what someone did.
         </p>
         <p>
           The basis is our legitimate interest in research (GDPR Art. 6(1)(f) and Art. 89; Swiss FADP Art. 31(2)(e)).
@@ -166,7 +160,7 @@ export default function PrivacyPage() {
             {CONTACT}
           </a>
           . You may also complain to a data-protection authority: in Switzerland the FDPIC, in the EU the one where you
-          live. Trading on acceptodds is explained in <Link href="/about">How it works</Link>.
+          live.
         </p>
       </div>
     </main>

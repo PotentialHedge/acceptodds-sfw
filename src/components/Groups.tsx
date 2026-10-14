@@ -346,7 +346,7 @@ export function GroupActions({ group, role, viewerHandle, members }: GroupAction
               router.refresh();
             }}
           >
-            The group and its board go for everyone in it. Nobody’s reputation or positions change.
+            The group and its reading list go for everyone in it. Nobody’s read markers change.
           </Confirm>
         </>
       )}

@@ -3,7 +3,8 @@ import { eq, sql } from 'drizzle-orm';
 import { getDb, type Database } from '@/db';
 import { user } from '@/db/auth-schema';
 import { agentCodes, type Account } from '@/db/schema';
-import { AGENT_KEY_NAME } from '@/lib/agent-prompt';
+/** The name of the key an agent signs in for (market edition; its routes are 404s here). */
+const AGENT_KEY_NAME = 'ai-agent';
 import { agentCodeMail } from '@/lib/auth-mails';
 import { ensureAccountForUser } from './accounts';
 import { normalizeEmail } from './affiliations';

@@ -1,6 +1,5 @@
 import { siteName, siteUrl } from '@/server/share';
 import { topPapers } from '@/server/seo';
-import { venues } from '@/venues';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,31 +15,20 @@ export async function GET() {
   const papers = await topPapers(25);
   const body = `# ${name}
 
-> A prediction market on the fate of research papers, traded in reputation (play money, not real money). Each paper has a market on its venue's question (${venues()
-    .map((v) => `${v.kind}: ${v.market.outcomes.map((o) => o.label).join(' or ')}`)
-    .join(
-      '; ',
-    )}); prices are the crowd's probabilities. Traders are people with a confirmed institutional email, and bots using API keys.
-
-Prices on a page are probabilities, not guarantees. A holding's displayed value is what selling it would pay, which is less than shares times price. Net worth on the leaderboard is at liquidation value.
+> The safe for work edition of acceptodds: research papers by venue, with search, a map laid out by topic, related papers and citations. There are no markets, prices or trading here.
 
 ## Read the site
 
-- [Home](${origin}/): papers by venue, sortable by odds, volume or activity; search with \`?q=\`
-- [How it works](${origin}/about): the market maker (LMSR), reputation, settlement
-- [Leaderboard](${origin}/leaderboard): traders ranked by net worth or settled profit
+- [Home](${origin}/): papers by venue, newest or most read first; search with \`?q=\`
+- [Map](${origin}/map): every paper of a venue placed near the papers most like it
 
 ## API
 
-- [Instructions for agents](${origin}/agent/start): trading for a person with their API key, start here
-- [Updates for agents](${origin}/agent/updates): dated notices of what changed, newest first
 - [API reference](${origin}/docs): interactive documentation
 - [OpenAPI document](${origin}/api/v1/openapi.json): the full machine-readable contract
-- Reads are public and need no key: \`GET ${origin}/api/v1/listings\`, \`/api/v1/markets\`, \`/api/v1/leaderboard\`. Each paper is a listing with its markets; \`?q=\` searches.
-- Amounts are decimal strings in micro-units (1 unit = 1,000,000 micro).
-- Trading needs an API key with the \`trade\` scope, made by a signed-in user on the profile page.
+- Reads are public and need no key: \`GET ${origin}/api/v1/listings\`; \`?q=\` searches.
 
-## Most traded open papers
+## Some papers
 ${papers.map((p) => `\n- [${p.title.replace(/[\[\]]/g, '')}](${origin}/papers/${encodeURIComponent(p.slug)})${p.kind ? `: ${p.kind}` : ''}`).join('')}
 
 ## Optional

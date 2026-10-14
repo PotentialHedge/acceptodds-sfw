@@ -50,7 +50,7 @@ export function NameBanner({
   return (
     <div className="flex flex-wrap items-baseline gap-x-3 border-b border-rule bg-highlight px-6 py-2 narrow:px-4 font-sans text-[13px]">
       <span>
-        Add your name: until you do, the leaderboard and your public page show you as <b>@{handle}</b>.
+        Add your name: until you do, your reading groups show you as <b>@{handle}</b>.
       </span>
       <EditName
         displayName={displayName}

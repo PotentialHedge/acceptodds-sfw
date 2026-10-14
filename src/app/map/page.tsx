@@ -28,7 +28,7 @@ async function mapVenue(sp: Awaited<SearchParams>): Promise<string> {
 export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
   const kind = await mapVenue(await searchParams);
   const title = 'Map of papers | acceptodds';
-  const description = `Every ${kind} paper on one map, placed near the papers most like it, coloured by topic or by its odds.`;
+  const description = `Every ${kind} paper on one map, placed near the papers most like it, coloured by topic.`;
   const url = `/map?${new URLSearchParams({ kind })}`;
   const images = venuePreviewImages(kind);
   return {

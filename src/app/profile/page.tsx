@@ -112,7 +112,7 @@ export default async function ProfilePage() {
           </Link>
           .
         </p>
-        <ApiKeys initial={apiKeys} n={keysTable} canTrade={a.isBot || a.verifiedAt !== null} />
+        <ApiKeys initial={apiKeys} n={keysTable} />
       </section>
 
       <hr className="my-10 border-rule-soft" />
