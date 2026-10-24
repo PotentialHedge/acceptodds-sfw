@@ -1,5 +1,5 @@
 /** The platform's source code, linked from the home page's abstract. */
-export const REPO_URL = 'https://github.com/benedict-armstrong/acceptodds-sfw';
+export const REPO_URL = 'https://github.com/PotentialHedge/acceptodds-sfw';
 
 /** Where an account goes after its first trade (`Fill.firstTrade`): what it bought, and a link to share. */
 export const FIRST_TRADE_PATH = '/first-trade';
