@@ -3,14 +3,6 @@
  * The field itself is read in `server/review-field.ts`.
  */
 
-/**
- * How many bars the review field is cut into. Finer than the 20 of the chance
- * of acceptance. A mean of three whole-number ratings falls on thirds, so bars
- * this narrow keep neighbouring means apart and some stand empty between them:
- * that is the shape of the data, not a gap in it.
- */
-export const REVIEW_BINS = 48;
-
 /** A mean, rounded so one read in SQL and one summed here compare equal. */
 export function roundMean(x: number): number {
   return Math.round(x * 1e6) / 1e6;
@@ -22,22 +14,52 @@ export function meanRating(ratings: readonly (number | null)[]): number | null {
   return xs.length === 0 ? null : roundMean(xs.reduce((a, b) => a + b, 0) / xs.length);
 }
 
+/** Where a curve is sampled across the scale. */
+export const CURVE_POINTS = 121;
+
 /**
- * The bin of `x` among `n` equal bins across `domain`, the last closed at its
- * top. The nudge is for a mean sitting on an edge: 2.25 must not fall to the
- * bin below because a division came out a hair under.
+ * The kernel's width, as a share of the scale. A mean of three whole-number
+ * ratings falls on thirds, so anything narrow draws a comb; at this width
+ * neighbouring thirds of a 1–4 scale (a ninth of it apart) blend into one
+ * shape. The curve is only the shape: the marker and every share read off the
+ * chart come from the real means.
  */
-export function binOf(x: number, domain: readonly [number, number], n: number): number {
-  const [lo, hi] = domain;
-  if (!(hi > lo)) return 0;
-  return Math.max(0, Math.min(n - 1, Math.floor(((x - lo) / (hi - lo)) * n + 1e-9)));
+const BANDWIDTH_OF_SCALE = 0.06;
+
+/** A distinct mean and the share of the field's papers on it. */
+export type Atom = readonly [mean: number, share: number];
+
+/** The distinct values of ascending `means`, each with its share of them. */
+export function atomsOf(means: readonly number[]): Atom[] {
+  const atoms: [number, number][] = [];
+  for (const x of means) {
+    const last = atoms[atoms.length - 1];
+    if (last && last[0] === x) last[1] += 1;
+    else atoms.push([x, 1]);
+  }
+  return atoms.map(([x, n]) => [x, n / means.length]);
 }
 
-/** The histogram of `values` across `domain`. */
-export function histogram(values: readonly number[], domain: readonly [number, number], n: number): number[] {
-  const bins = Array.from({ length: n }, () => 0);
-  for (const x of values) bins[binOf(x, domain, n)] += 1;
-  return bins;
+/** The share of the field strictly below `x`: ties are not beaten. */
+export function shareBelow(atoms: readonly Atom[], x: number): number {
+  let sum = 0;
+  for (const [mean, share] of atoms) {
+    if (mean >= x) break;
+    sum += share;
+  }
+  return sum;
+}
+
+/** The Gaussian kernel density of `atoms` at `CURVE_POINTS` even points across `domain`, scaled to peak at 1. */
+export function densityCurve(atoms: readonly Atom[], domain: readonly [number, number]): number[] {
+  const [lo, hi] = domain;
+  const h = (hi - lo) * BANDWIDTH_OF_SCALE;
+  const ys = Array.from({ length: CURVE_POINTS }, (_, i) => {
+    const x = lo + ((hi - lo) * i) / (CURVE_POINTS - 1);
+    return atoms.reduce((sum, [mean, share]) => sum + share * Math.exp(-0.5 * ((x - mean) / h) ** 2), 0);
+  });
+  const peak = Math.max(...ys);
+  return ys.map((y) => (peak > 0 ? y / peak : 0));
 }
 
 interface Threaded {

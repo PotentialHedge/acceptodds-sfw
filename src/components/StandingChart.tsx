@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { countBelow, niceTicks } from '@/lib/distribution';
 import { REP } from '@/lib/format';
 
@@ -27,6 +27,8 @@ function units(x: number): string {
  * (or arrow keys) reads any point off: how many traders have less. `marks`
  * (the bots, on the global board) are open circles on the curve, unlabelled
  * so they never collide; hovering one names it. One series, so no legend.
+ * `format` lets another field of numbers use the same drawing (a paper's mean
+ * review rating); left out, it reads as traders' net worth.
  */
 export function StandingChart({
   curve,
@@ -36,6 +38,7 @@ export function StandingChart({
   label,
   other = null,
   marks = [],
+  format,
 }: {
   /** The density at evenly spaced points across `domain`, root-scaled to peak at 1. */
   curve: number[];
@@ -51,6 +54,8 @@ export function StandingChart({
   other?: { value: number; label: string } | null;
   /** More traders to mark, in the same units, each named only on hover. */
   marks?: readonly { value: number; label: string }[];
+  /** What the chart is of: its axis, its hover readout and its name to a screen reader. */
+  format?: { tick: (x: number) => string; ticks?: number[]; readout: (x: number) => ReactNode; ariaLabel: string };
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(720);
@@ -85,7 +90,7 @@ export function StandingChart({
   const area = `${line}L${sx(d.domain[1]).toFixed(1)},${base}L${sx(d.domain[0]).toFixed(1)},${base}Z`;
   const youX = at === null ? null : sx(at);
   const youY = at === null ? null : sy(yAt(d, at));
-  const ticks = niceTicks(d.domain[0], d.domain[1], Math.max(2, Math.floor(plotW / 140)));
+  const ticks = format?.ticks ?? niceTicks(d.domain[0], d.domain[1], Math.max(2, Math.floor(plotW / 140)));
   const otherX = otherAt === null ? null : sx(otherAt);
   const otherY = otherAt === null ? null : sy(yAt(d, otherAt));
   // Keep a label inside the chart when its line is near an edge.
@@ -103,7 +108,9 @@ export function StandingChart({
         width={width}
         height={height}
         role="img"
-        aria-label={`Net worth of the field${label ? `; ${label}` : ''}${other ? `; ${other.label}` : ''}`}
+        aria-label={
+          format?.ariaLabel ?? `Net worth of the field${label ? `; ${label}` : ''}${other ? `; ${other.label}` : ''}`
+        }
         tabIndex={0}
         className="block overflow-visible focus:outline-none"
         onPointerMove={(e) => {
@@ -134,7 +141,7 @@ export function StandingChart({
         <line x1={PAD.left} x2={width - PAD.right} y1={base} y2={base} strokeWidth={1} className="stroke-rule-strong" />
         {ticks.map((t) => (
           <text key={t} x={sx(t)} y={base + 17} textAnchor="middle" className="fill-muted font-mono text-[11px]">
-            {units(t)}
+            {format ? format.tick(t) : units(t)}
           </text>
         ))}
         {marks.map((m) => {
@@ -211,10 +218,19 @@ export function StandingChart({
           className="pointer-events-none absolute top-1 z-10 border border-frame bg-card px-2 py-1 font-sans text-xs whitespace-nowrap text-ink shadow-sm"
           style={hoverX > width / 2 ? { right: width - hoverX + 8 } : { left: hoverX + 8 }}
         >
-          <span className="font-mono">
-            {units(hover)} {REP}
-          </span>
-          <span className="text-muted"> {Math.floor((100 * hoverBelow) / values.length)}% of traders have less</span>
+          {format ? (
+            format.readout(hover)
+          ) : (
+            <>
+              <span className="font-mono">
+                {units(hover)} {REP}
+              </span>
+              <span className="text-muted">
+                {' '}
+                {Math.floor((100 * hoverBelow) / values.length)}% of traders have less
+              </span>
+            </>
+          )}
           {hoverMarks.length > 0 && <div>{hoverMarks.join(', ')}</div>}
         </div>
       )}

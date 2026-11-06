@@ -1,6 +1,5 @@
-import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { binOf, histogram, meanRating, REVIEW_BINS, threadReviews } from '@/lib/reviews';
+import { atomsOf, CURVE_POINTS, densityCurve, meanRating, shareBelow, threadReviews } from '@/lib/reviews';
 
 const comment = (externalId: string, replyTo: string | null) => ({ externalId, kind: 'comment' as const, replyTo });
 const review = (externalId: string) => ({ externalId, kind: 'review' as const, replyTo: null });
@@ -16,37 +15,39 @@ describe('meanRating', () => {
   });
 });
 
-describe('binOf', () => {
-  it('closes the last bin at the top of the scale, and keeps out-of-range values on the chart', () => {
-    expect(binOf(1, [1, 5], 48)).toBe(0);
-    expect(binOf(5, [1, 5], 48)).toBe(47);
-    expect(binOf(0, [1, 5], 48)).toBe(0);
-    expect(binOf(9, [1, 5], 48)).toBe(47);
+describe('atomsOf and shareBelow', () => {
+  const atoms = atomsOf([1, 2, 2, 2, 3]);
+  it('gathers ties, with shares summing to one', () => {
+    expect(atoms).toEqual([
+      [1, 0.2],
+      [2, 0.6],
+      [3, 0.2],
+    ]);
   });
-  it('puts a mean on an edge in the bin that starts there', () => {
-    // 1/12-wide bins: every third and quarter of a point is an edge, and division must not drop it a bin.
-    for (let k = 0; k < 48; k += 1) expect(binOf(1 + k / 12, [1, 5], 48)).toBe(k);
-  });
-  it('survives a one-point domain', () => {
-    expect(binOf(3, [3, 3], 48)).toBe(0);
-  });
-  it('is monotonic and always a real bin', () => {
-    fc.assert(
-      fc.property(fc.double({ min: 0, max: 10, noNaN: true }), fc.double({ min: 0, max: 10, noNaN: true }), (a, b) => {
-        const [x, y] = a <= b ? [a, b] : [b, a];
-        const [i, j] = [binOf(x, [0, 10], REVIEW_BINS), binOf(y, [0, 10], REVIEW_BINS)];
-        return i <= j && i >= 0 && j < REVIEW_BINS;
-      }),
-    );
+  it('counts only what is strictly below: a tie is not beaten', () => {
+    expect(shareBelow(atoms, 1)).toBe(0);
+    expect(shareBelow(atoms, 2)).toBeCloseTo(0.2);
+    expect(shareBelow(atoms, 2.5)).toBeCloseTo(0.8);
+    expect(shareBelow(atoms, 4)).toBeCloseTo(1);
   });
 });
 
-describe('histogram', () => {
-  it('counts every value exactly once', () => {
-    const values = [1, 1.5, 2, 3.25, 5];
-    const bins = histogram(values, [1, 5], REVIEW_BINS);
-    expect(bins).toHaveLength(REVIEW_BINS);
-    expect(bins.reduce((a, b) => a + b, 0)).toBe(values.length);
+describe('densityCurve', () => {
+  // The shape that made a histogram a comb: means on the thirds of a 1–4 scale.
+  const thirds = atomsOf([1.67, 1.67, 2, 2, 2, 2, 2.33, 2.33, 2.33, 2.67].map((x) => Math.round(x * 3) / 3));
+  const curve = densityCurve(thirds, [1, 4]);
+  it('samples the whole scale and peaks at 1', () => {
+    expect(curve).toHaveLength(CURVE_POINTS);
+    expect(Math.max(...curve)).toBeCloseTo(1);
+    expect(Math.min(...curve)).toBeGreaterThanOrEqual(0);
+  });
+  it('blends neighbouring thirds into one hump, with no comb between them', () => {
+    const peak = curve.indexOf(Math.max(...curve));
+    for (let i = 1; i <= peak; i += 1) expect(curve[i]).toBeGreaterThanOrEqual(curve[i - 1] - 1e-9);
+    for (let i = peak + 1; i < curve.length; i += 1) expect(curve[i]).toBeLessThanOrEqual(curve[i - 1] + 1e-9);
+  });
+  it('survives an empty field', () => {
+    expect(densityCurve([], [1, 4]).every((y) => y === 0)).toBe(true);
   });
 });
 

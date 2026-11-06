@@ -1,25 +1,39 @@
 'use client';
 
-import { binOf } from '@/lib/reviews';
 import { standingBand } from '@/lib/leaderboard';
+import { shareBelow } from '@/lib/reviews';
 import type { ReviewField } from '@/server/review-field';
-import { FieldBars } from './FieldBars';
+import { StandingChart } from './StandingChart';
 
-/** A paper's mean review rating among the reviewed papers at its venue: `FieldBars` on the venue's own scale. */
+/**
+ * A paper's mean review rating among the reviewed papers at its venue: the
+ * shape of the field, the part below the paper shaded, and a line at its exact
+ * mean. Means pile onto thirds, so bars show a comb; the curve shows the shape,
+ * and hovering reads the exact share below any point.
+ */
 export function ReviewStanding({ field, mean }: { field: ReviewField; mean: number }) {
   const [lo, hi] = field.domain;
-  const n = field.bins.length;
-  const step = (hi - lo) / n;
+  // Every whole rating on a short scale; a long one is left to the chart, by its width.
+  const ticks = hi - lo <= 6 ? Array.from({ length: hi - lo + 1 }, (_, i) => lo + i) : undefined;
   const label = field.ahead === null ? 'this paper' : `this paper, ${standingBand(field.ahead)}`;
-  const ticks = Array.from({ length: hi - lo + 1 }, (_, i) => ({ at: i / (hi - lo), text: String(lo + i) }));
   return (
-    <FieldBars
-      bins={field.bins}
-      mine={binOf(mean, field.domain, n)}
+    <StandingChart
+      curve={field.curve}
+      domain={field.domain}
+      values={[]}
+      you={mean}
       label={label}
-      ariaLabel={`Mean review rating of the reviewed papers at ${field.kind}; ${label}, at ${mean.toFixed(2)}`}
-      ticks={ticks}
-      binLabel={(i) => `${(lo + i * step).toFixed(2)}–${(lo + (i + 1) * step).toFixed(2)}`}
+      format={{
+        tick: (x) => String(x),
+        ticks,
+        ariaLabel: `Mean review rating of the reviewed papers at ${field.kind}; ${label}, at ${mean.toFixed(2)}`,
+        readout: (x) => (
+          <>
+            <span className="font-mono">{x.toFixed(2)}</span>
+            <span className="text-muted"> {Math.floor(shareBelow(field.atoms, x) * 100)}% of papers are lower</span>
+          </>
+        ),
+      }}
     />
   );
 }

@@ -2,12 +2,12 @@ import { sql } from 'drizzle-orm';
 import { getDb, type Database } from '@/db';
 import { countBelow } from '@/lib/distribution';
 import { percentAhead } from '@/lib/leaderboard';
-import { histogram, REVIEW_BINS, roundMean } from '@/lib/reviews';
+import { atomsOf, densityCurve, roundMean, type Atom } from '@/lib/reviews';
 import { ReadCache } from './read-cache';
 
 /**
  * Where a paper's mean review rating sits among the reviewed papers at its
- * venue: the histogram of every such paper's mean, across the venue's own
+ * venue: the density of every such paper's mean, across the venue's own
  * scale (the lowest and highest single rating given there, so no venue's scale
  * is written down here). **Reads only.** Reviews arrive in bulk from
  * `../research`, so the field is cached per venue for longer than a market's.
@@ -17,8 +17,10 @@ export interface ReviewField {
   kind: string;
   /** The venue's scale, as whole numbers. */
   domain: [number, number];
-  /** Papers per equal-width bin across `domain` (`REVIEW_BINS`), the last closed at its top. */
-  bins: number[];
+  /** The shape of the field: its density at even points across `domain`, peaking at 1. Drawing only. */
+  curve: number[];
+  /** Each distinct mean with its share of the field, ascending: exact, for reading shares off the chart. */
+  atoms: Atom[];
   /** The share of the other reviewed papers strictly below this one, rounded down. */
   ahead: number | null;
 }
@@ -29,7 +31,8 @@ const TTL_MS = 10 * 60_000;
 
 interface Venue {
   domain: [number, number];
-  bins: number[];
+  curve: number[];
+  atoms: Atom[];
   /** Every reviewed paper's mean, ascending. Stays on the server: the page gets the share. */
   means: number[];
 }
@@ -49,7 +52,8 @@ async function readVenue(kind: string, database: Database): Promise<Venue | null
   if (!(hi > lo)) return null;
   const domain: [number, number] = [lo, hi];
   const means = rows.map((r) => roundMean(r.mean)).sort((a, b) => a - b);
-  return { domain, means, bins: histogram(means, domain, REVIEW_BINS) };
+  const atoms = atomsOf(means);
+  return { domain, means, atoms, curve: densityCurve(atoms, domain) };
 }
 
 /** `null` when the paper has no venue or no mean, or its venue is too few or all of one rating. */
@@ -65,7 +69,8 @@ export async function reviewField(
   return {
     kind,
     domain: venue.domain,
-    bins: venue.bins,
+    curve: venue.curve,
+    atoms: venue.atoms,
     ahead: percentAhead(countBelow(venue.means, mean), venue.means.length),
   };
 }
