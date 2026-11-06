@@ -75,7 +75,7 @@ const FOOTNOTE = (
   </div>
 );
 
-/** The home page's sorts, default first. None reads a market. */
+/** The home page's sorts besides `rating` and `recommended`, default first when those are not offered. None reads a market. */
 const SORTS: readonly BrowseSort[] = ['newest', 'popular'];
 /** Sorts kept out of the row, in the ⋯ menu. */
 const MENU_SORTS: readonly BrowseSort[] = [];
@@ -162,10 +162,10 @@ export default async function Home({
   const me = viewer?.account.id ?? null;
   // `recommended` once the viewer has done enough for it to mean something (`server/recommendations.ts`).
   const recommends = me !== null && (await canRecommend(me));
-  // It is then the default, listed first.
   const base: readonly BrowseSort[] = recommends ? ['recommended', ...SORTS] : SORTS;
-  // Ratings are on each venue's own scale, so they rank only within one venue.
-  const offered: readonly BrowseSort[] = kindFilter !== null ? [...base, 'rating'] : base;
+  // The default within a venue, listed first. Ratings are on each venue's own scale, so they rank only
+  // within one; a venue with no reviews yet comes out newest first, as its tie-break.
+  const offered: readonly BrowseSort[] = kindFilter !== null ? ['rating', ...base] : base;
   const sorts: readonly BrowseSort[] = q ? ['relevance', ...offered] : offered;
   const sort: BrowseSort = (sorts as readonly string[]).includes(one(sp.sort) ?? '')
     ? (one(sp.sort) as BrowseSort)

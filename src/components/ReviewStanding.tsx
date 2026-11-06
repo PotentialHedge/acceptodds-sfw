@@ -96,6 +96,7 @@ export function ReviewFigure({
           </div>
         )}
       </div>
+      {cohort && <CohortKey cohort={cohort.cohort} field={at.field} />}
       <ReviewStanding key={`${among}:${at.label}`} field={at.field} mean={at.mean} name={name} within={!!cohort} />
       <figcaption className={ui.caption}>
         <b>Figure {figure}.</b> Mean {name} of {cohortPhrase(cohort?.cohort, at.field)}. This paper averages{' '}
@@ -106,9 +107,42 @@ export function ReviewFigure({
             , above {at.field.ahead}% of {others}
           </>
         )}
-        .{cohort && ` The dashed line is the shape of all reviewed papers at ${at.field.kind}.`}
+        .{cohort && ' The two curves show shapes, each scaled to the same height, not numbers of papers.'}
       </figcaption>
     </figure>
+  );
+}
+
+/** What each mark on a cohort's chart is. Its swatches are drawn as the chart draws them. */
+function CohortKey({ cohort, field }: { cohort: ReviewCohort; field: ReviewField }) {
+  const line = (dashed: boolean, className: string) => (
+    <svg width="22" height="8" aria-hidden className="mr-1.5 inline-block">
+      <line
+        x1="0"
+        x2="22"
+        y1="4"
+        y2="4"
+        strokeWidth={dashed ? 1.5 : 2}
+        strokeDasharray={dashed ? '4 3' : undefined}
+        className={className}
+      />
+    </svg>
+  );
+  return (
+    <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 font-sans text-xs text-subtle">
+      <li>
+        {line(false, 'stroke-subtle')}
+        {field.papers} {cohort === 'nearest' ? 'nearest' : 'related'} papers
+      </li>
+      <li>
+        {line(true, 'stroke-muted')}
+        all reviewed papers at {field.kind}
+      </li>
+      <li>
+        <span className="mr-1.5 inline-block size-2.5 bg-accent/15" />
+        {cohort === 'nearest' ? 'nearest' : 'related'} papers scoring lower than this one
+      </li>
+    </ul>
   );
 }
 

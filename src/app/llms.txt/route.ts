@@ -19,7 +19,7 @@ export async function GET() {
 
 ## Read the site
 
-- [Home](${origin}/): papers by venue, newest or most read first; search with \`?q=\`
+- [Home](${origin}/): papers by venue, best rated, newest or most read first; search with \`?q=\`
 - [Map](${origin}/map): every paper of a venue placed near the papers most like it
 
 ## API
