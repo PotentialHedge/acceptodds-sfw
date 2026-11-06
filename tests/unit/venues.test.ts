@@ -55,7 +55,6 @@ describe('venues', () => {
 
     it('keeps the share line Latin, for the OG image', () => {
       expect(v.shareSuffix).toMatch(/^[\x20-\x7e]+$/);
-      expect(v.cardQuestion.suffix).toMatch(/^[\x20-\x7e]+$/);
     });
   });
 

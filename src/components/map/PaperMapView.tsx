@@ -656,7 +656,7 @@ function derive(data: PaperMap) {
     y: data.y[i],
     region: data.region[i],
     cluster: data.cluster[i],
-    headline: data.headline[i],
+    headline: null,
   }));
   const positions = normalise(points);
   const regionNames = new Map(data.regions.map((t) => [t.number, t.label]));

@@ -7,6 +7,7 @@ import { getDb } from '@/db';
 import { orders } from '@/db/schema';
 import { revokeToken } from '@/server/tokens';
 import pkg from '../../package.json';
+import { MARKET_API, under } from '@/lib/sfw';
 import { api, ROUTE_PATTERNS, trader } from './api-client';
 import { closePool, resetDatabase, seedMarket, STARTING_MICRO, type Fixture } from './helpers';
 
@@ -51,7 +52,7 @@ describe('OpenAPI', () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it('documents every route file under app/api/v1, and nothing else', async () => {
+  it('documents every route file under app/api/v1 but the market ones, and nothing else', async () => {
     const root = join(process.cwd(), 'src/app/api/v1');
     const files: string[] = [];
     const walk = (dir: string) => {
@@ -68,7 +69,9 @@ describe('OpenAPI', () => {
       .sort();
 
     const doc = (await api('GET', '/openapi.json')).body;
-    expect(Object.keys(doc.paths).sort()).toEqual(routes);
+    // The safe for work edition answers MARKET_API with a 404 (proxy.ts), so the document leaves those out.
+    const served = routes.filter((r) => !MARKET_API.some((p) => under(`/api/v1${r.replace(/\{\w+\}/g, 'x')}`, p)));
+    expect(Object.keys(doc.paths).sort()).toEqual(served);
     // …and the in-process test router knows about all of them.
     expect(
       ROUTE_PATTERNS.filter((p) => p !== '/openapi.json')

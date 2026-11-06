@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { Account, Affiliation, Group, Wallet } from '@/db/schema';
+import type { Account, Affiliation, Group } from '@/db/schema';
 import type { Principal } from '../auth';
 import type { Portfolio as PortfolioModel } from '../accounts';
 import type { Fill as FillModel, Quote as QuoteModel } from '../engine';
@@ -69,7 +69,6 @@ export function presentListing(v: ListingView): z.input<typeof S.Listing> {
     createdAt: toIso(l.createdAt),
     followers: v.followers,
     views: l.viewCount,
-    markets: v.markets.map(presentMarket),
   };
 }
 
@@ -80,12 +79,11 @@ function presentCited(c: CitedListing): z.input<typeof S.CitedListing> {
     title: c.listing.title,
     authors: c.listing.authors,
     kind: c.listing.kind,
-    market: c.main ? presentMarket(c.main) : null,
   };
 }
 
 export function presentRelated(r: RelatedList): z.input<typeof S.ListingRelated> {
-  return { related: r.related.map(presentCited), hidden: r.hidden };
+  return { related: r.related.map(presentCited) };
 }
 
 export function presentCitations(c: ListingCitations): z.input<typeof S.ListingCitations> {
@@ -105,22 +103,7 @@ export function presentCitations(c: ListingCitations): z.input<typeof S.ListingC
 }
 
 export function presentFollowed(f: FollowedListing): z.input<typeof S.FollowedListing> {
-  const outcome = f.main && f.move ? f.main.outcomes[f.move.ordinal] : null;
-  return {
-    listing: presentListing(f.view),
-    followedAt: toIso(f.followedAt),
-    headline:
-      f.main && f.move && outcome
-        ? {
-            marketId: f.main.market.id,
-            outcomeId: outcome.id,
-            outcomeLabel: outcome.label,
-            negated: f.move.negated,
-            price: f.move.now,
-            price24hAgo: f.move.then,
-          }
-        : null,
-  };
+  return { listing: presentListing(f.view), followedAt: toIso(f.followedAt) };
 }
 
 /** The public tape entry. No account, no idempotency key: no identities. */
@@ -169,7 +152,7 @@ export function presentFill(f: FillModel, firstTrade: boolean): z.input<typeof S
   };
 }
 
-export function presentMe(p: Principal, wallets: readonly Wallet[]): z.input<typeof S.Me> {
+export function presentMe(p: Principal): z.input<typeof S.Me> {
   const a: Account = p.account;
   return {
     id: a.id,
@@ -178,10 +161,6 @@ export function presentMe(p: Principal, wallets: readonly Wallet[]): z.input<typ
     isBot: a.isBot,
     institutions: [...a.institutions],
     verifiedAt: toIsoOrNull(a.verifiedAt),
-    canTrade: a.isBot || a.verifiedAt !== null,
-    wallets: wallets.flatMap((w) =>
-      w.kind === null ? [] : [{ kind: w.kind, balanceMicro: w.balanceMicro.toString() }],
-    ),
     createdAt: toIso(a.createdAt),
     digestOptIn: a.digestOptIn,
     mentionMailOptIn: a.mentionMailOptIn,

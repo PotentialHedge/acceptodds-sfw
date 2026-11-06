@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { ENTERED_COOKIE, MARKET_API, MARKET_PAGES, NEXT_HEADER, under } from './lib/sfw';
+import { ENTERED_COOKIE, MARKET_API, MARKET_PAGES, NEXT_HEADER, REDIRECT_PAGES, under } from './lib/sfw';
 
 /**
  * The safe for work edition's front door. Two jobs, before any route runs:
  *
  * - The market edition's pages and its trading API are not served: a 404,
  *   so nothing can be bought, valued or ranked here even by a client that
- *   still knows the old paths.
+ *   still knows the old paths. `/about` goes to the home page instead.
  * - A browser that has not yet gone past the gate (no `sfw_entered` cookie)
  *   is shown it (`/gate`, rewritten so the address bar keeps the page
  *   asked for), whatever page it asked for. Its button posts to `/enter`,
@@ -24,6 +24,12 @@ export function proxy(request: NextRequest) {
       );
     }
     return NextResponse.next();
+  }
+  if (REDIRECT_PAGES.some((p) => under(pathname, p))) {
+    const home = request.nextUrl.clone();
+    home.pathname = '/';
+    home.search = '';
+    return NextResponse.redirect(home, 307);
   }
   if (MARKET_PAGES.some((p) => under(pathname, p))) {
     return new NextResponse('Not found', { status: 404, headers: { 'content-type': 'text/plain' } });

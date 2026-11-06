@@ -6,8 +6,6 @@ import { publicPositionPath, shortPath } from '@/lib/links';
 import type { PublicPositionView } from './public-positions';
 import { listingView, marketView, resolveListing, resolveMarket, type MarketView } from './views';
 import { ApiError } from './api/errors';
-import { defaultMarketKind } from '@/lib/venue';
-import { venue, venues, venueSlug } from '@/venues';
 
 /**
  * What the share surfaces read (issue #11): the short link `/s/<n>`, the
@@ -23,18 +21,6 @@ export function siteUrl(): string {
 /** The name on the badge. */
 export function siteName(): string {
   return process.env.SITE_NAME ?? 'acceptodds';
-}
-
-/**
- * A venue's link preview, for a page's `openGraph.images` and
- * `twitter.images`: its home card (`app/[venue]/opengraph-image.tsx`), else
- * the default venue's. Pages that show one venue's papers (home, map) name
- * theirs; the root layout gives the default to every page without its own.
- */
-export function venuePreviewImages(kind: string | null) {
-  const v = venue(kind) ?? venue(defaultMarketKind()) ?? venues()[0];
-  const alt = `${siteName()}: ${v.cardTitle.charAt(0).toLowerCase()}${v.cardTitle.slice(1)}`;
-  return [{ url: `/${venueSlug(v)}/opengraph-image`, width: 1200, height: 630, type: 'image/png', alt }];
 }
 
 export interface ShareSubject {
