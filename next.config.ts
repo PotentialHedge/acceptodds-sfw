@@ -24,6 +24,8 @@ const nextConfig: NextConfig = {
   // Not optional: the production image copies .next/standalone and is ~200 MB
   // instead of ~1 GB. The deployment host's disk budget depends on it.
   output: 'standalone',
+  // Read at run time by the share card, so the trace has to be told.
+  outputFileTracingIncludes: { '/papers/[slug]/card.png': ['./assets/fonts/LiberationSerif-Regular.ttf'] },
 };
 
 export default nextConfig;

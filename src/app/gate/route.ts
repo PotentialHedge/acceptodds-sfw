@@ -1,19 +1,45 @@
 import { safeReturnTo } from '@/lib/return-to';
+import { cardPath, previewTags } from '@/lib/preview-tags';
 import { NEXT_HEADER } from '@/lib/sfw';
+import { shareSubject, siteUrl } from '@/server/share';
 
 /**
  * The gate (`proxy.ts` rewrites every page here until a browser has gone
  * past it): the market edition's maintenance page, `maintenance/index.html`,
  * plus a button into the safe for work edition. Plain HTML outside the root
  * layout, as the maintenance page is. The button posts to `/enter` with the
- * page that was asked for.
+ * page that was asked for. A link preview's crawler has no cookie and never
+ * presses it, so a paper's gate carries that paper's preview tags.
  */
 export async function GET(request: Request) {
   const next = safeReturnTo(request.headers.get(NEXT_HEADER));
   const escaped = next.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-  return new Response(PAGE.replace('__NEXT__', escaped), {
-    headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
-  });
+  // A function: a title's `$` must not be read as a replacement pattern.
+  const meta = await paperPreview(next);
+  return new Response(
+    PAGE.replace('__META__', () => meta).replace('__NEXT__', () => escaped),
+    {
+      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+    },
+  );
+}
+
+/** The preview tags of the paper at `next` (`/papers/<slug>` or `/s/<n>`), if it is one. The gate never fails over them. */
+async function paperPreview(next: string): Promise<string> {
+  const match = /^\/(?:papers|s)\/([^/?#]+)\/?(?:[?#].*)?$/.exec(next);
+  if (!match) return '';
+  try {
+    const listing = (await shareSubject(decodeURIComponent(match[1])))?.listing;
+    if (!listing) return '';
+    return previewTags({
+      title: listing.title,
+      description: listing.summary?.slice(0, 200) ?? listing.title,
+      url: `${siteUrl()}/papers/${encodeURIComponent(listing.slug)}`,
+      image: `${siteUrl()}${cardPath(listing.slug)}`,
+    });
+  } catch {
+    return '';
+  }
 }
 
 const PAGE = `<!doctype html>
@@ -21,7 +47,8 @@ const PAGE = `<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>acceptodds</title>
+    <title>acceptodds</title>
+    __META__
     <style>
       html,
       body {

@@ -1,15 +1,19 @@
+import type { ReactNode } from 'react';
 import { Markdown } from '@/components/Markdown';
+import { MathText } from '@/components/MathText';
 import { ReviewStanding } from '@/components/ReviewStanding';
 import { ui } from '@/components/ui';
 import type { ListingReview } from '@/db/schema';
 import { day } from '@/lib/format';
+import { reviewMath } from '@/lib/review-math';
 import { meanRating, threadReviews } from '@/lib/reviews';
 import type { ReviewField } from '@/server/review-field';
 
 /**
  * What a paper's reviewers and commenters wrote at its venue, and where its
  * mean rating sits there. Attribution is shown because it is owed: reviews are
- * licensed writing, by default CC BY 4.0. `figure` is the number of the
+ * licensed writing, by default CC BY 4.0. The scores show at once and the
+ * writing is a click away, since a paper's reviews can run to pages. `figure` is the number of the
  * distribution, drawn only when there is a `field`.
  */
 export function PaperReviews({
@@ -45,16 +49,16 @@ export function PaperReviews({
         <article key={review.externalId} className="mt-5 border-t border-rule pt-3">
           <Heading item={review} />
           <Scores item={review} />
-          <Sections item={review} />
+          <Collapsed summary="Read review">
+            <Sections item={review} />
+          </Collapsed>
           <Comments comments={comments} />
         </article>
       ))}
       {loose.length > 0 && (
         <div className="mt-5 border-t border-rule pt-3">
           <h4 className={ui.runIn}>Comments on the paper</h4>
-          {loose.map((c) => (
-            <CommentItem key={c.externalId} item={c} />
-          ))}
+          <Comments comments={loose} />
         </div>
       )}
       <p className={ui.fine}>
@@ -101,24 +105,30 @@ function Sections({ item }: { item: ListingReview }) {
       {item.sections.map((s, i) => (
         <div key={i} className="mt-2 text-[15px]">
           {s.label && <h5 className="font-sans text-[13px] font-semibold text-subtle">{s.label}</h5>}
-          <Markdown>{s.text}</Markdown>
+          <Markdown>{reviewMath(s.text)}</Markdown>
         </div>
       ))}
     </>
   );
 }
 
+function Collapsed({ summary, children }: { summary: string; children: ReactNode }) {
+  return (
+    <details className="mt-2">
+      <summary className="cursor-pointer font-sans text-[13px] text-accent">{summary}</summary>
+      {children}
+    </details>
+  );
+}
+
 function Comments({ comments }: { comments: ListingReview[] }) {
   if (comments.length === 0) return null;
   return (
-    <details className="mt-3">
-      <summary className="cursor-pointer font-sans text-[13px] text-accent">
-        {comments.length === 1 ? '1 comment' : `${comments.length} comments`}
-      </summary>
+    <Collapsed summary={comments.length === 1 ? '1 comment' : `${comments.length} comments`}>
       {comments.map((c) => (
         <CommentItem key={c.externalId} item={c} />
       ))}
-    </details>
+    </Collapsed>
   );
 }
 
@@ -126,7 +136,11 @@ function CommentItem({ item }: { item: ListingReview }) {
   return (
     <div className="mt-3 border-l-2 border-rule pl-3">
       <Heading item={item} />
-      {item.title && <p className="mt-0.5 text-[15px] font-semibold">{item.title}</p>}
+      {item.title && (
+        <p className="mt-0.5 text-[15px] font-semibold">
+          <MathText text={item.title} />
+        </p>
+      )}
       <Sections item={item} />
     </div>
   );

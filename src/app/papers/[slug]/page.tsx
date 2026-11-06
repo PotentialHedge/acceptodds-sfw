@@ -9,14 +9,13 @@ import { groupsOf } from '@/server/groups';
 import { FollowStar } from '@/components/FollowStar';
 import { PaperDiscussion } from '@/components/PaperDiscussion';
 import { PaperReviews } from '@/components/PaperReviews';
-import { Reactions } from '@/components/Reactions';
 import { PAPER_COMMENT_PAGE } from '@/lib/discussion-page';
 import { presentPaperComment } from '@/server/api/present';
 import { listPaperComments } from '@/server/discussion';
-import { reactionsOf } from '@/server/reactions';
 import { reviewField } from '@/server/review-field';
 import { reviewsOf } from '@/server/reviews';
 import { meanRating } from '@/lib/reviews';
+import { CARD, cardPath } from '@/lib/preview-tags';
 import { MathText } from '@/components/MathText';
 import { RememberVenue } from '@/components/RememberVenue';
 import { RunningHead } from '@/components/RunningHead';
@@ -36,18 +35,28 @@ import { listingCitations, listingRelatedTo, listingView, onMap, resolveListing 
 export const dynamic = 'force-dynamic';
 
 /**
- * The link preview's text: the title and the abstract, with no image.
+ * The link preview: the title and the abstract, and a card showing where the
+ * paper's rating sits (`card.png`). A crawler has no cookie, so it reads the
+ * same preview from the gate (`app/gate/route.ts`).
  */
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const subject = await shareSubject(decodeURIComponent((await params).slug));
   if (!subject) return {};
   const description = subject.listing?.summary?.slice(0, 200) ?? subject.title;
+  const image = subject.listing ? cardPath(subject.listing.slug) : undefined;
   return {
     title: `${subject.title.replace(/\$/g, '')} | ${siteName()}`,
     description,
     alternates: { canonical: subject.path },
-    openGraph: { title: subject.title, description, url: subject.path, type: 'article', siteName: siteName() },
-    twitter: { card: 'summary', title: subject.title, description },
+    openGraph: {
+      title: subject.title,
+      description,
+      url: subject.path,
+      type: 'article',
+      siteName: siteName(),
+      ...(image ? { images: [{ url: image, ...CARD }] } : {}),
+    },
+    twitter: { card: image ? 'summary_large_image' : 'summary', title: subject.title, description, images: image },
   };
 }
 
@@ -100,9 +109,8 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
   const [myReadingGroups, alreadyListed] = viewer
     ? await Promise.all([groupsOf(viewer.account.id), readingGroupIdsForListing(viewer.account.id, listing.id)])
     : [[], new Set<string>()];
-  const [[readStatus], reactions, discussion] = await Promise.all([
+  const [[readStatus], discussion] = await Promise.all([
     readingStatuses([listing.id], viewer?.account.id ?? null),
-    reactionsOf(listing.id, viewer?.account.id ?? null),
     listPaperComments(listing.id, { limit: PAPER_COMMENT_PAGE, viewerAccountId: viewer?.account.id ?? null }),
   ]);
   const main = markets[0];
@@ -168,7 +176,6 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
             </>
           )}
         </div>
-        <Reactions listingId={listing.id} initial={reactions} signedIn={viewer !== null} />
       </TitleBlock>
 
       <PaperReviews

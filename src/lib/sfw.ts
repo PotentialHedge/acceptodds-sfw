@@ -44,6 +44,8 @@ export const MARKET_API = [
   '/api/v1/me/positions',
   '/api/v1/me/mentions',
   '/api/v1/me/agent-code',
+  // Not a market: reactions are switched off for now. Remove this, and restore them on the paper page, to bring them back.
+  '/api/v1/listings/*/reactions',
 ];
 
 /** Whether `path` is `prefix` or under it, `*` matching one segment. */
