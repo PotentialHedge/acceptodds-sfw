@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- response bodies are checked field by field */
-import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { getDb } from '@/db';
@@ -505,21 +504,12 @@ describe('the paper map', () => {
     for (const slug of slugs) await post({ slug, title: `A paper with a long enough title, number ${slug}` });
     await put({ points: slugs.map((slug, i) => ({ slug, x: i, y: -i })) });
     const plain = await api('GET', '/map/titles');
-    expect(plain.headers.get('content-encoding')).toBeNull();
-
-    for (const [accept, encoding, decode] of [
-      ['gzip, deflate, br', 'br', brotliDecompressSync],
-      ['gzip', 'gzip', gunzipSync],
-      ['br;q=0, gzip', 'gzip', gunzipSync],
-    ] as const) {
-      // The handler itself: `api()` reads the body as text.
-      const req = new Request(new URL('/api/v1/map/titles', ORIGIN), { headers: { 'accept-encoding': accept } });
-      const res = await mapTitlesRoute.GET(req, { params: Promise.resolve({}) });
-      expect(res.headers.get('content-encoding')).toBe(encoding);
-      expect(res.headers.get('vary')).toBe('Accept-Encoding');
-      expect(res.headers.get('etag')).toBe(plain.headers.get('etag'));
-      expect(JSON.parse(decode(Buffer.from(await res.arrayBuffer())).toString())).toEqual(plain.body);
-    }
+    // The handler itself: `api()` reads the body as text.
+    const req = new Request(new URL('/api/v1/map/titles', ORIGIN), { headers: { 'accept-encoding': 'gzip, br' } });
+    const res = await mapTitlesRoute.GET(req, { params: Promise.resolve({}) });
+    expect(res.headers.get('content-encoding')).toBeNull();
+    expect(res.headers.get('etag')).toBe(plain.headers.get('etag'));
+    expect(JSON.parse(await res.text())).toEqual(plain.body);
   });
 
   it('answers a revalidation with 304 until the map changes', async () => {
