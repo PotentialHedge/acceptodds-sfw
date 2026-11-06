@@ -138,10 +138,6 @@ function CohortKey({ cohort, field }: { cohort: ReviewCohort; field: ReviewField
         {line(true, 'stroke-muted')}
         all reviewed papers at {field.kind}
       </li>
-      <li>
-        <span className="mr-1.5 inline-block size-2.5 bg-accent/15" />
-        {cohort === 'nearest' ? 'nearest' : 'related'} papers scoring lower than this one
-      </li>
     </ul>
   );
 }
