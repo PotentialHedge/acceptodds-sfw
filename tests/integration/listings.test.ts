@@ -499,7 +499,7 @@ describe('the paper map', () => {
     expect((await api('GET', '/map/titles')).body.titles['not-yet']).toBe('Later');
   });
 
-  it('sends a large body compressed when the client accepts it', async () => {
+  it("leaves compression out: Next drops a handler's Content-Encoding, leaving bytes no browser can read", async () => {
     const slugs = Array.from({ length: 60 }, (_, i) => `paper-${i}`);
     for (const slug of slugs) await post({ slug, title: `A paper with a long enough title, number ${slug}` });
     await put({ points: slugs.map((slug, i) => ({ slug, x: i, y: -i })) });
