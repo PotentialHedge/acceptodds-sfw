@@ -70,6 +70,17 @@ describe('parseSearch', () => {
     expect(errors).toHaveLength(6);
   });
 
+  it('reads rating and score as a number field', () => {
+    const rating = (op: string, value: string) => ({ kind: 'compare', field: 'rating', op, value });
+    expect(parseSearch('rating>=3.5').node).toEqual(rating('>=', '3.5'));
+    expect(parseSearch('score<2').node).toEqual(rating('<', '2'));
+    expect(parseSearch('rating:>=3').node).toEqual(rating('>=', '3'));
+    expect(parseSearch('rating:4').node).toEqual(rating('=', '4'));
+    expect(parseSearch('rating>=3').fields.has('rating')).toBe(true);
+    expect(parseSearch('rating>good').errors).toHaveLength(1);
+    expect(parseSearch('rating>-1').errors).toHaveLength(1);
+  });
+
   it('accepts a trailing % on accept', () => {
     expect(parseSearch('accept>50%').node).toEqual({ kind: 'compare', field: 'accept', op: '>', value: '50' });
   });

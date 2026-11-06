@@ -36,7 +36,8 @@ export function SearchSyntax({ people = false }: { people?: boolean }) {
         </tbody>
       </table>
       <p className="mt-1.5">
-        Filters take <code>:</code> and <code>!=</code>. Quote a value with spaces. For example:{' '}
+        Filters take <code>:</code> and <code>!=</code>, and <code>rating</code> also <code>&gt;</code>,{' '}
+        <code>&gt;=</code>, <code>&lt;</code> and <code>&lt;=</code>. Quote a value with spaces. For example:{' '}
         <code>(venue:iclr OR venue:neurips) diffusion -keyword:survey</code>
       </p>
     </>

@@ -10,7 +10,7 @@ type RowMarket = {
 
 /**
  * One paper in a list, as the home page sets it: its link
- * (`lib/paper-link.ts` `rowLink`: its [pdf], else [abs]), title and authors. The whole row is
+ * (`lib/paper-link.ts` `rowLink`: its [pdf], else [abs]), title, authors and mean review rating. The whole row is
  * one target: a link (`href`), or a button (`onPick`) for a list that
  * chooses rather than navigates (`/welcome`).
  */
@@ -19,6 +19,8 @@ export function PaperRow({
   authors,
   pdf,
   tldr,
+  rating,
+  ratingCount = 0,
   href,
   onPick,
 }: {
@@ -27,6 +29,9 @@ export function PaperRow({
   pdf?: { url: string; label: string };
   /** Shown under the authors when given. */
   tldr?: string | null;
+  /** The mean review rating, on the venue's scale, at the row's right; nothing when null. */
+  rating?: number | null;
+  ratingCount?: number;
   /** Accepted from the market edition's callers and never drawn: no prices in the safe for work edition. */
   market?: RowMarket | null;
   volumeMicro?: bigint | string | null;
@@ -38,7 +43,7 @@ export function PaperRow({
   const name = <MathText text={title} />;
   return (
     // Safe for work edition: no market, so no likelihood edge, volume, sparkline or headline.
-    <div className="relative grid grid-cols-[34px_1fr] items-center gap-x-3.5 border-b border-dotted border-rule-strong py-2 hover:bg-highlight">
+    <div className="relative grid grid-cols-[34px_1fr_auto] items-center gap-x-3.5 border-b border-dotted border-rule-strong py-2 hover:bg-highlight">
       <span className="font-sans text-xs">
         {pdf && (
           <a href={pdf.url} className="relative z-10 text-accent" rel="noopener noreferrer" target="_blank">
@@ -61,6 +66,13 @@ export function PaperRow({
         {tldr && (
           <span className="mt-0.5 block text-[13px] leading-snug text-muted">
             <MathText text={tldr} />
+          </span>
+        )}
+      </span>
+      <span className="font-mono text-[13px] text-muted">
+        {rating != null && (
+          <span title={`Mean rating over ${ratingCount === 1 ? 'one review' : `${ratingCount} reviews`}`}>
+            {rating.toFixed(2)}
           </span>
         )}
       </span>

@@ -163,7 +163,9 @@ export default async function Home({
   // `recommended` once the viewer has done enough for it to mean something (`server/recommendations.ts`).
   const recommends = me !== null && (await canRecommend(me));
   // It is then the default, listed first.
-  const offered: readonly BrowseSort[] = recommends ? ['recommended', ...SORTS] : SORTS;
+  const base: readonly BrowseSort[] = recommends ? ['recommended', ...SORTS] : SORTS;
+  // Ratings are on each venue's own scale, so they rank only within one venue.
+  const offered: readonly BrowseSort[] = kindFilter !== null ? [...base, 'rating'] : base;
   const sorts: readonly BrowseSort[] = q ? ['relevance', ...offered] : offered;
   const sort: BrowseSort = (sorts as readonly string[]).includes(one(sp.sort) ?? '')
     ? (one(sp.sort) as BrowseSort)
@@ -466,6 +468,8 @@ function Row({ r, tldr }: { r: BrowseRow; tldr: boolean }) {
       authors={r.listing?.authors ?? []}
       pdf={pdf}
       tldr={tldr ? r.listing?.tldr : null}
+      rating={r.reviewMean}
+      ratingCount={r.reviewCount}
       href={r.listing ? `/papers/${r.listing.slug}` : `/markets/${r.main?.market.slug}`}
     />
   );

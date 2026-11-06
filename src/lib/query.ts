@@ -21,7 +21,7 @@
 import { prefixTsquery } from './search';
 
 export const TEXT_FIELDS = ['title', 'author', 'keyword', 'area', 'venue'] as const;
-export const NUMBER_FIELDS = ['accept', 'volume', 'trades'] as const;
+export const NUMBER_FIELDS = ['accept', 'volume', 'trades', 'rating'] as const;
 export const SEARCH_FIELDS = [...TEXT_FIELDS, 'status', ...NUMBER_FIELDS] as const;
 export type SearchField = (typeof SEARCH_FIELDS)[number];
 
@@ -49,6 +49,8 @@ const ALIASES: Record<string, SearchField> = {
   vol: 'volume',
   trades: 'trades',
   fills: 'trades',
+  rating: 'rating',
+  score: 'rating',
 };
 
 /** One line per field, for the syntax help. */
@@ -67,6 +69,12 @@ export const FIELD_HELP: { field: SearchField; aliases: string[]; example: strin
   },
   { field: 'volume', aliases: ['vol'], example: 'volume>100', means: '$rep traded' },
   { field: 'trades', aliases: ['fills'], example: 'trades>=5', means: 'number of fills' },
+  {
+    field: 'rating',
+    aliases: ['score'],
+    example: 'rating>=3.5',
+    means: 'average review score as shown, on the venue’s scale',
+  },
 ];
 
 export const STATUS_VALUES = ['open', 'closed', 'settled', 'void'] as const;
@@ -86,7 +94,7 @@ export type SearchNode =
   /** A text field: contains (`=`) or does not (`!=`), case-insensitively. */
   | { kind: 'match'; field: (typeof TEXT_FIELDS)[number]; op: '=' | '!='; value: string }
   | { kind: 'status'; op: '=' | '!='; value: StatusValue }
-  /** `value` is a plain decimal string: a percentage, rep, or a count. */
+  /** `value` is a plain decimal string: a percentage, rep, a count, or a mean review rating. */
   | { kind: 'compare'; field: (typeof NUMBER_FIELDS)[number]; op: CompareOp; value: string };
 
 export interface ParsedSearch {

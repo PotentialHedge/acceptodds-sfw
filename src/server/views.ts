@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import { and, asc, desc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, ne, sql, type SQL } from 'drizzle-orm';
 import { getDb, type Database } from '@/db';
 import {
   accounts,
@@ -7,6 +7,7 @@ import {
   listingFollows,
   listingReferences,
   listingRelated,
+  listingReviews,
   listings,
   listingTexts,
   mapPoints,
@@ -26,7 +27,8 @@ import { MINIMAP_CANDIDATES, MINIMAP_NEAREST } from '@/lib/map';
 import { RELATED_UNBET } from '@/lib/related';
 import { percentAhead } from '@/lib/leaderboard';
 import { microToFloat } from '@/lib/money';
-import { containsPattern, parseSearch, requiredText, websearchOf, type SearchNode } from '@/lib/query';
+import { containsPattern, parseSearch, requiredText, websearchOf, type CompareOp, type SearchNode } from '@/lib/query';
+import { roundMean } from '@/lib/reviews';
 import { normalizeSearch, prefixTsquery } from '@/lib/search';
 import { cosineDistance } from '@/lib/vectors';
 import { ApiError } from './api/errors';
@@ -231,6 +233,7 @@ function searchPredicate(node: SearchNode, skip: SearchNode | null): SQL | null 
     case 'status':
       return node.op === '=' ? rowStatusIs(node.value) : sql`not ${rowStatusIs(node.value)}`;
     case 'compare': {
+      if (node.field === 'rating') return ratingCompare(node.op, node.value);
       const [column, value] = {
         // Void has no headline, whatever the cache last held: it compares as unknown.
         accept: [sql`(case when m.status = 'void' then null else m.headline end) * 100`, sql`${node.value}::float8`],
@@ -241,6 +244,20 @@ function searchPredicate(node: SearchNode, skip: SearchNode | null): SQL | null 
       return sql`coalesce(${column} ${sql.raw(COMPARE_SQL[node.op])} ${value}, false)`;
     }
   }
+}
+
+/**
+ * The row's listing has a mean review rating that compares so. The mean is taken at the two decimals
+ * a row shows, so `rating>=3.67` keeps a paper shown as 3.67, whose mean is 3.666…. A paper with no
+ * rated review never matches, under any operator. An id set read once, as in `rowMatches`.
+ */
+function ratingCompare(op: CompareOp, value: string): SQL {
+  return sql`coalesce(l.id in (
+    select r.listing_id from listing_reviews r
+     where r.kind = 'review' and r.rating is not null
+     group by r.listing_id
+    having round(avg(r.rating)::numeric, 2) ${sql.raw(COMPARE_SQL[op])} ${value}::numeric
+  ), false)`;
 }
 
 /**
@@ -1476,8 +1493,12 @@ export type MarketSort = (typeof MARKET_SORTS)[number];
  * is one. `recommended` needs `recommendFor` (`server/recommendations.ts`)
  * and is `activity` without it.
  */
-/** `popular` (most read) is the safe for work edition's, which sorts on nothing a market holds. */
-export type BrowseSort = MarketSort | 'relevance' | 'recommended' | 'popular';
+/**
+ * `popular` (most read) and `rating` (mean review rating) are the safe for work edition's, which
+ * sorts on nothing a market holds. Ratings are on each venue's own scale, so `rating` compares only
+ * within one venue: the caller offers it only with `kind` set.
+ */
+export type BrowseSort = MarketSort | 'relevance' | 'recommended' | 'popular' | 'rating';
 
 export interface BrowseRow {
   /** The listing this row stands for, or null for a market that has none. */
@@ -1495,6 +1516,9 @@ export interface BrowseRow {
   totalOrderCount: number;
   /** The latest fill in any market in the row. */
   lastTradeAt: Date | null;
+  /** The mean of the listing's review ratings on its venue's scale, and how many; null and 0 with none. */
+  reviewMean: number | null;
+  reviewCount: number;
 }
 
 /** Rows on one page of `browseListings`, and how many there are in all. */
@@ -1606,9 +1630,10 @@ async function readBrowsePage(
 
   const marketIds = found.flatMap((r) => (r.market_id ? [r.market_id] : []));
   const listingIds = found.flatMap((r) => (r.listing_id ? [r.listing_id] : []));
-  const [loadedMarkets, loadedListings] = await Promise.all([
+  const [loadedMarkets, loadedListings, ratings] = await Promise.all([
     marketIds.length > 0 ? database.select().from(markets).where(inArray(markets.id, marketIds)) : [],
     listingIds.length > 0 ? database.select().from(listings).where(inArray(listings.id, listingIds)) : [],
+    reviewRatings(listingIds, database),
   ]);
   const views = new Map((await marketViews(loadedMarkets, database)).map((v) => [v.market.id, v] as const));
   const listingById = new Map(loadedListings.map((l) => [l.id, l]));
@@ -1622,8 +1647,34 @@ async function readBrowsePage(
       totalVolumeMicro: BigInt(r.volume),
       totalOrderCount: r.order_count,
       lastTradeAt: r.last_trade_at ? new Date(r.last_trade_at) : null,
+      reviewMean: ratings.get(r.listing_id ?? '')?.mean ?? null,
+      reviewCount: ratings.get(r.listing_id ?? '')?.count ?? 0,
     })),
   };
+}
+
+/** The mean rating and rated-review count of those of `listingIds` that have any. */
+async function reviewRatings(
+  listingIds: readonly string[],
+  database: Database,
+): Promise<Map<string, { mean: number; count: number }>> {
+  if (listingIds.length === 0) return new Map();
+  const rows = await database
+    .select({
+      listingId: listingReviews.listingId,
+      mean: sql<number>`avg(${listingReviews.rating})::float8`,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(listingReviews)
+    .where(
+      and(
+        inArray(listingReviews.listingId, [...listingIds]),
+        eq(listingReviews.kind, 'review'),
+        isNotNull(listingReviews.rating),
+      ),
+    )
+    .groupBy(listingReviews.listingId);
+  return new Map(rows.map((r) => [r.listingId, { mean: roundMean(r.mean), count: r.count }]));
 }
 
 type BrowseFilter = Omit<Parameters<typeof browseListings>[0], 'offset' | 'limit'> & {
@@ -1765,6 +1816,8 @@ function browseQuery(q: BrowseFilter): { from: SQL; order: SQL[]; searching: boo
       recommended: activity,
       newest: [sql`l.short_id desc nulls last`],
       popular,
+      // Means fall on thirds, so ties are many: the one more reviews stand behind comes first.
+      rating: [sql`rv.mean desc nulls last`, sql`rv.n desc nulls last`, sql`l.short_id desc nulls last`],
       relevance: tq ? [sql`hit.r desc`, sql`l.short_id desc nulls last`] : [sql`l.short_id desc nulls last`],
     }[q.sort],
   ];
@@ -1773,6 +1826,16 @@ function browseQuery(q: BrowseFilter): { from: SQL; order: SQL[]; searching: boo
       from ${ROWS}
       ${hits}
       ${recommending ? sql`left join ${scoresTable(recommending)} rec on rec.listing_id = l.id` : sql``}
+      ${
+        q.sort === 'rating'
+          ? sql`left join (
+        select r.listing_id, avg(r.rating) as mean, count(*) as n
+          from listing_reviews r
+         where r.kind = 'review' and r.rating is not null
+         group by r.listing_id
+      ) rv on rv.listing_id = l.id`
+          : sql``
+      }
       -- Visible markets of a listing other than its main one, summed into the
       -- row. Few listings have any, and markets_secondary_idx holds just those.
       -- The sums are bigint, not sum()'s numeric: \`volume\` sorts on ROW_VOLUME,
