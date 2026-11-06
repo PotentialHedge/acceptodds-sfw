@@ -14,6 +14,43 @@ export function meanRating(ratings: readonly (number | null)[]): number | null {
   return xs.length === 0 ? null : roundMean(xs.reduce((a, b) => a + b, 0) / xs.length);
 }
 
+/** What the distribution calls the review's own rating, beside its other scores. */
+export const OVERALL = 'Overall';
+
+/**
+ * The scores a review gives beside its rating, lower-cased from the venue's labels, in the order they break a tie
+ * in the rating: what the paper is, then how it reads, then how sure the reviewer was. On ICLR 2027's
+ * reviews the first three rise with the rating (r 0.4 to 0.5) and confidence falls slightly (r -0.15):
+ * reviewers are surer of a low score, so it is no mark of quality and only decides what is left.
+ */
+export const REVIEW_FACTORS = ['soundness', 'informativeness', 'presentation', 'confidence'] as const;
+export type ReviewFactor = (typeof REVIEW_FACTORS)[number];
+
+export function isReviewFactor(name: string): name is ReviewFactor {
+  return (REVIEW_FACTORS as readonly string[]).includes(name);
+}
+
+/** A score's label as one of `REVIEW_FACTORS` (each is also a column of `listing_reviews`), or `null`. */
+export function factorOf(label: string): ReviewFactor | null {
+  const name = label.toLowerCase();
+  return isReviewFactor(name) ? name : null;
+}
+
+/** Each score label among `reviews` with its mean and how many gave it: `REVIEW_FACTORS` first, any other by name. */
+export function factorMeans(
+  reviews: readonly { scores: readonly { label: string; value: number }[] }[],
+): { label: string; mean: number; count: number }[] {
+  const values = new Map<string, number[]>();
+  for (const r of reviews) for (const s of r.scores) values.set(s.label, [...(values.get(s.label) ?? []), s.value]);
+  const rank = (label: string) => {
+    const factor = factorOf(label);
+    return factor === null ? REVIEW_FACTORS.length : REVIEW_FACTORS.indexOf(factor);
+  };
+  return [...values]
+    .map(([label, xs]) => ({ label, mean: meanRating(xs)!, count: xs.length }))
+    .sort((a, b) => rank(a.label) - rank(b.label) || a.label.localeCompare(b.label));
+}
+
 /** Where a curve is sampled across the scale. */
 export const CURVE_POINTS = 121;
 

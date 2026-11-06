@@ -2,7 +2,8 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { upsertListing } from '@/server/listings';
 import { getDb } from '@/db';
-import { clearReviewFieldCache, reviewField } from '@/server/review-field';
+import { factorMeans } from '@/lib/reviews';
+import { clearReviewFieldCache, reviewFactorFields, reviewField } from '@/server/review-field';
 import { reviewsOf, setReviews } from '@/server/reviews';
 import { browseListings } from '@/server/views';
 import { api, trader } from './api-client';
@@ -134,6 +135,88 @@ describe('the home list and ratings', () => {
     expect(rows.map((r) => r.listing?.slug)).toEqual([tied2.slug, tied1.slug, low.slug, none.slug]);
     expect(rows.map((r) => r.reviewMean)).toEqual([3, 3, 1.5, null]);
     expect(rows.map((r) => r.reviewCount)).toEqual([2, 1, 2, 0]);
+  });
+
+  const scored = (externalId: string, rating: number, scores: Record<string, number>) => ({
+    ...rated(externalId, rating),
+    scores: Object.entries(scores).map(([label, value]) => ({ label, value })),
+  });
+
+  it('breaks a tie in the rating by the other scores, in order, before the number of reviews', async () => {
+    const [unscored, confident, informative, sound, lower] = await Promise.all(
+      ['unscored', 'confident', 'informative', 'sound', 'lower'].map((s) => paper(s)),
+    );
+    await setReviews(unscored, [rated('a', 3), rated('b', 3), rated('c', 3)]);
+    await setReviews(confident, [scored('a', 3, { Soundness: 2, Informativeness: 2, Confidence: 4 })]);
+    await setReviews(informative, [scored('a', 3, { Soundness: 2, Informativeness: 3, Confidence: 1 })]);
+    await setReviews(sound, [scored('a', 3, { Soundness: 3, Informativeness: 1, Confidence: 1 })]);
+    await setReviews(lower, [scored('a', 2, { Soundness: 3, Informativeness: 3, Confidence: 4 })]);
+    const { rows } = await browseListings({ sort: 'rating', status: 'all', kind: 'ICLR 2027' }, getDb());
+    expect(rows.map((r) => r.listing?.slug)).toEqual([
+      sound.slug,
+      informative.slug,
+      confident.slug,
+      unscored.slug,
+      lower.slug,
+    ]);
+  });
+
+  it('filters on the mean of another score, and never matches a paper without it', async () => {
+    const [none, thirds, high] = await Promise.all(['none', 'thirds', 'high'].map((s) => paper(s)));
+    await setReviews(none, [rated('a', 3)]);
+    await setReviews(thirds, [
+      scored('a', 3, { Soundness: 2 }),
+      scored('b', 3, { Soundness: 3 }),
+      scored('c', 3, { Soundness: 3 }),
+    ]);
+    await setReviews(high, [scored('a', 1, { Soundness: 3, Confidence: 1 })]);
+    const found = async (q: string) => {
+      const { rows } = await browseListings({ sort: 'newest', status: 'all', q }, getDb());
+      return rows.map((r) => r.listing?.slug).sort();
+    };
+    expect(await found('soundness>=2.67')).toEqual([high.slug, thirds.slug].sort());
+    expect(await found('soundness=2.67')).toEqual([thirds.slug]);
+    expect(await found('soundness!=3')).toEqual([thirds.slug]);
+    expect(await found('confidence<2')).toEqual([high.slug]);
+    expect(await found('soundness>=2 rating>=2')).toEqual([thirds.slug]);
+  });
+
+  it('searches what reviewers wrote, stemmed, as a phrase, and not their section labels', async () => {
+    const [leaky, reversed, silent, commented] = await Promise.all(
+      ['leaky', 'reversed', 'silent', 'commented'].map((s) => paper(s)),
+    );
+    const said = (externalId: string, text: string) => ({
+      ...rated(externalId, 3),
+      sections: [{ label: 'Critical weaknesses', text }],
+    });
+    await setReviews(leaky, [said('a', 'The authors leak data leakages everywhere.')]);
+    await setReviews(reversed, [said('a', 'Leakage of data is unlikely.')]);
+    await setReviews(commented, [
+      { externalId: 'c', kind: 'comment', sections: [{ label: '', text: 'No data leakage here.' }] },
+    ]);
+    const found = async (q: string) => {
+      const { rows } = await browseListings({ sort: 'newest', status: 'all', q }, getDb());
+      return rows.map((r) => r.listing?.slug).sort();
+    };
+    expect(await found('review:"data leakage"')).toEqual([commented.slug, leaky.slug].sort());
+    expect(await found('review:leakage')).toEqual([commented.slug, leaky.slug, reversed.slug].sort());
+    expect(await found('review:critical')).toEqual([]);
+    expect(await found('review:"data leakage" title:leaky')).toEqual([leaky.slug]);
+    expect(await found('review!=leakage')).toEqual([silent.slug]);
+    expect(await found('-review:leakage')).toEqual([silent.slug]);
+  });
+
+  it('places a paper on each of its scores, each on its own scale, and leaves out one with no field', async () => {
+    const [a, b] = await Promise.all(['a', 'b'].map((s) => paper(s)));
+    await setReviews(a, [scored('x', 3, { Soundness: 3, Confidence: 1, Rare: 2 })]);
+    await setReviews(b, [scored('x', 3, { Soundness: 1, Confidence: 4 })]);
+    const series = await reviewFactorFields(
+      'ICLR 2027',
+      factorMeans((await reviewsOf(a.id)).filter((r) => r.kind === 'review')),
+    );
+    expect(series.map((s) => s.label)).toEqual(['Soundness', 'Confidence']);
+    expect(series[0].field).toMatchObject({ domain: [1, 3], ahead: 100 });
+    expect(series[1].field).toMatchObject({ domain: [1, 4], ahead: 0 });
   });
 
   it('filters on the mean as a row shows it, in the search syntax', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { atomsOf, CURVE_POINTS, densityCurve, meanRating, shareBelow, threadReviews } from '@/lib/reviews';
+import { atomsOf, CURVE_POINTS, densityCurve, factorMeans, meanRating, shareBelow, threadReviews } from '@/lib/reviews';
 
 const comment = (externalId: string, replyTo: string | null) => ({ externalId, kind: 'comment' as const, replyTo });
 const review = (externalId: string) => ({ externalId, kind: 'review' as const, replyTo: null });
@@ -74,5 +74,25 @@ describe('threadReviews', () => {
     const { reviews, loose } = threadReviews([comment('a', 'b'), comment('b', 'a'), comment('self', 'self')]);
     expect(reviews).toEqual([]);
     expect(loose).toHaveLength(3);
+  });
+});
+
+describe('factorMeans', () => {
+  const review = (scores: Record<string, number>) => ({
+    scores: Object.entries(scores).map(([label, value]) => ({ label, value })),
+  });
+
+  it('means each label over the reviews that gave it, tie-break order first, any other by name', () => {
+    const out = factorMeans([
+      review({ Zest: 1, Confidence: 4, Soundness: 3, Novelty: 2 }),
+      review({ Confidence: 2, Soundness: 2 }),
+    ]);
+    expect(out.map((f) => f.label)).toEqual(['Soundness', 'Confidence', 'Novelty', 'Zest']);
+    expect(out[0]).toEqual({ label: 'Soundness', mean: 2.5, count: 2 });
+    expect(out[2]).toEqual({ label: 'Novelty', mean: 2, count: 1 });
+  });
+
+  it('is empty without scores', () => {
+    expect(factorMeans([review({})])).toEqual([]);
   });
 });

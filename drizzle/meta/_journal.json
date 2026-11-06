@@ -330,6 +330,20 @@
       "when": 1793971936246,
       "tag": "0046_listing_reviews",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1793983240896,
+      "tag": "0047_review_text_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1793983829065,
+      "tag": "0048_review_factor_columns",
+      "breakpoints": true
     }
   ]
 }

@@ -28,7 +28,7 @@ import { RELATED_UNBET } from '@/lib/related';
 import { percentAhead } from '@/lib/leaderboard';
 import { microToFloat } from '@/lib/money';
 import { containsPattern, parseSearch, requiredText, websearchOf, type CompareOp, type SearchNode } from '@/lib/query';
-import { roundMean } from '@/lib/reviews';
+import { isReviewFactor, REVIEW_FACTORS, roundMean, type ReviewFactor } from '@/lib/reviews';
 import { normalizeSearch, prefixTsquery } from '@/lib/search';
 import { cosineDistance } from '@/lib/vectors';
 import { ApiError } from './api/errors';
@@ -232,8 +232,13 @@ function searchPredicate(node: SearchNode, skip: SearchNode | null): SQL | null 
     }
     case 'status':
       return node.op === '=' ? rowStatusIs(node.value) : sql`not ${rowStatusIs(node.value)}`;
+    case 'review': {
+      const found = reviewsSay(node.value);
+      return node.op === '=' ? found : sql`not ${found}`;
+    }
     case 'compare': {
-      if (node.field === 'rating') return ratingCompare(node.op, node.value);
+      if (node.field === 'rating' || isReviewFactor(node.field))
+        return reviewMeanCompare(node.field, node.op, node.value);
       const [column, value] = {
         // Void has no headline, whatever the cache last held: it compares as unknown.
         accept: [sql`(case when m.status = 'void' then null else m.headline end) * 100`, sql`${node.value}::float8`],
@@ -247,16 +252,25 @@ function searchPredicate(node: SearchNode, skip: SearchNode | null): SQL | null 
 }
 
 /**
- * The row's listing has a mean review rating that compares so. The mean is taken at the two decimals
- * a row shows, so `rating>=3.67` keeps a paper shown as 3.67, whose mean is 3.666…. A paper with no
- * rated review never matches, under any operator. An id set read once, as in `rowMatches`.
+ * The row's listing has a mean of this review score that compares so. The mean is taken at the two
+ * decimals a row shows, so `rating>=3.67` keeps a paper shown as 3.67, whose mean is 3.666…. A paper with
+ * no such score never matches, under any operator. An id set read once, as in `rowMatches`. `column` is
+ * one of a fixed list, never input.
  */
-function ratingCompare(op: CompareOp, value: string): SQL {
+function reviewMeanCompare(column: 'rating' | ReviewFactor, op: CompareOp, value: string): SQL {
+  const score = sql.raw(`r.${column}`);
   return sql`coalesce(l.id in (
     select r.listing_id from listing_reviews r
-     where r.kind = 'review' and r.rating is not null
+     where r.kind = 'review' and ${score} is not null
      group by r.listing_id
-    having round(avg(r.rating)::numeric, 2) ${sql.raw(COMPARE_SQL[op])} ${value}::numeric
+    having round(avg(${score})::numeric, 2) ${sql.raw(COMPARE_SQL[op])} ${value}::numeric
+  ), false)`;
+}
+
+/** Some review or comment on the row's listing says `phrase`. An id set read once through the GIN index. */
+function reviewsSay(phrase: string): SQL {
+  return sql`coalesce(l.id in (
+    select r.listing_id from listing_reviews r where r.search_vector @@ phraseto_tsquery('english', ${phrase})
   ), false)`;
 }
 
@@ -1816,8 +1830,14 @@ function browseQuery(q: BrowseFilter): { from: SQL; order: SQL[]; searching: boo
       recommended: activity,
       newest: [sql`l.short_id desc nulls last`],
       popular,
-      // Means fall on thirds, so ties are many: the one more reviews stand behind comes first.
-      rating: [sql`rv.mean desc nulls last`, sql`rv.n desc nulls last`, sql`l.short_id desc nulls last`],
+      // Means fall on thirds, so ties are many: the other scores decide them, in `REVIEW_FACTORS`'
+      // order, then the one more reviews stand behind comes first.
+      rating: [
+        sql`rv.mean desc nulls last`,
+        ...REVIEW_FACTORS.map((f) => sql`${sql.raw(`rv.${f}`)} desc nulls last`),
+        sql`rv.n desc nulls last`,
+        sql`l.short_id desc nulls last`,
+      ],
       relevance: tq ? [sql`hit.r desc`, sql`l.short_id desc nulls last`] : [sql`l.short_id desc nulls last`],
     }[q.sort],
   ];
@@ -1829,7 +1849,8 @@ function browseQuery(q: BrowseFilter): { from: SQL; order: SQL[]; searching: boo
       ${
         q.sort === 'rating'
           ? sql`left join (
-        select r.listing_id, avg(r.rating) as mean, count(*) as n
+        select r.listing_id, round(avg(r.rating)::numeric, 2) as mean, count(*) as n,
+               ${sql.raw(REVIEW_FACTORS.map((f) => `avg(r.${f}) as ${f}`).join(', '))}
           from listing_reviews r
          where r.kind = 'review' and r.rating is not null
          group by r.listing_id

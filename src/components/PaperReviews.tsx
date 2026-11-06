@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
 import { Markdown } from '@/components/Markdown';
 import { MathText } from '@/components/MathText';
-import { ReviewStanding } from '@/components/ReviewStanding';
+import { ReviewFigure } from '@/components/ReviewStanding';
 import { ui } from '@/components/ui';
 import type { ListingReview } from '@/db/schema';
 import { day } from '@/lib/format';
 import { reviewMath } from '@/lib/review-math';
-import { meanRating, threadReviews } from '@/lib/reviews';
-import type { ReviewField } from '@/server/review-field';
+import { meanRating, OVERALL, threadReviews } from '@/lib/reviews';
+import type { ReviewField, ReviewSeries } from '@/server/review-field';
 
 /**
  * What a paper's reviewers and commenters wrote at its venue, and where its
@@ -19,11 +19,14 @@ import type { ReviewField } from '@/server/review-field';
 export function PaperReviews({
   items,
   field,
+  factors,
   sourceUrl,
   figure,
 }: {
   items: ListingReview[];
   field: ReviewField | null;
+  /** The paper's other scores, for the distribution to switch to. */
+  factors: ReviewSeries[];
   sourceUrl: string | null;
   figure: number;
 }) {
@@ -36,14 +39,7 @@ export function PaperReviews({
     <section>
       <h3 className={ui.groupHeading}>Reviews</h3>
       {field && mean !== null && (
-        <figure className="my-3">
-          <ReviewStanding field={field} mean={mean} />
-          <figcaption className={ui.caption}>
-            <b>Figure {figure}.</b> Mean review rating of the reviewed papers at {field.kind}. This paper averages{' '}
-            <span className="font-mono">{mean.toFixed(2)}</span> over {rated === 1 ? 'one review' : `${rated} reviews`}
-            {field.ahead !== null && <>, above {field.ahead}% of the others</>}.
-          </figcaption>
-        </figure>
+        <ReviewFigure figure={figure} series={[{ label: OVERALL, mean, count: rated, field }, ...factors]} />
       )}
       {reviews.map(({ review, comments }) => (
         <article key={review.externalId} className="mt-5 border-t border-rule pt-3">

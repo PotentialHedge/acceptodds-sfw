@@ -280,6 +280,20 @@ export const listingReviews = pgTable(
       .$type<ListingReviewScore[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
+    // Each of `REVIEW_FACTORS`, out of `scores`: unpacking the JSON for every review at a venue took
+    // 1 s a factor, on every read of the home list. Null on a review that did not give it, and on a comment.
+    soundness: doublePrecision('soundness').generatedAlwaysAs(
+      sql`(jsonb_path_query_first(scores, '$[*] ? (@.label == "Soundness").value'))::float8`,
+    ),
+    informativeness: doublePrecision('informativeness').generatedAlwaysAs(
+      sql`(jsonb_path_query_first(scores, '$[*] ? (@.label == "Informativeness").value'))::float8`,
+    ),
+    presentation: doublePrecision('presentation').generatedAlwaysAs(
+      sql`(jsonb_path_query_first(scores, '$[*] ? (@.label == "Presentation").value'))::float8`,
+    ),
+    confidence: doublePrecision('confidence').generatedAlwaysAs(
+      sql`(jsonb_path_query_first(scores, '$[*] ? (@.label == "Confidence").value'))::float8`,
+    ),
     /** `[{ label, text }]`, in the supplier's order; `text` is Markdown and untrusted. */
     sections: jsonb('sections')
       .$type<ListingReviewSection[]>()
@@ -295,6 +309,9 @@ export const listingReviews = pgTable(
     index('listing_reviews_rated_idx')
       .on(t.listingId, t.rating)
       .where(sql`${t.kind} = 'review' and ${t.rating} is not null`),
+    // The `review:` search's. `search_vector` is `review_search_vector(sections)`, stored and not
+    // declared here, as on `listings`: a phrase's lossy GIN match rechecks it for every candidate.
+    index('listing_reviews_search_idx').using('gin', sql`search_vector`),
     check('listing_reviews_kind_check', sql`${t.kind} in ('review', 'comment')`),
   ],
 );

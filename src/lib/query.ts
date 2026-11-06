@@ -9,6 +9,7 @@
  *
  *     graph neural author:hinton accept>=60 -status:settled
  *     (venue:iclr OR venue:neurips) "diffusion model" trades>10
+ *     soundness>=2.5 review:"data leakage"
  *
  * Words and phrases are full-text search, as before: next to each other in
  * one AND they are merged into a single `websearch_to_tsquery` string, so a
@@ -18,11 +19,12 @@
  * one. A known field with a bad value is dropped with an error the page shows.
  */
 
+import { REVIEW_FACTORS } from './reviews';
 import { prefixTsquery } from './search';
 
 export const TEXT_FIELDS = ['title', 'author', 'keyword', 'area', 'venue'] as const;
-export const NUMBER_FIELDS = ['accept', 'volume', 'trades', 'rating'] as const;
-export const SEARCH_FIELDS = [...TEXT_FIELDS, 'status', ...NUMBER_FIELDS] as const;
+export const NUMBER_FIELDS = ['accept', 'volume', 'trades', 'rating', ...REVIEW_FACTORS] as const;
+export const SEARCH_FIELDS = [...TEXT_FIELDS, 'status', 'review', ...NUMBER_FIELDS] as const;
 export type SearchField = (typeof SEARCH_FIELDS)[number];
 
 /** Every name a field answers to. The first spelling of each is its own name. */
@@ -51,6 +53,16 @@ const ALIASES: Record<string, SearchField> = {
   fills: 'trades',
   rating: 'rating',
   score: 'rating',
+  soundness: 'soundness',
+  sound: 'soundness',
+  informativeness: 'informativeness',
+  informative: 'informativeness',
+  info: 'informativeness',
+  presentation: 'presentation',
+  confidence: 'confidence',
+  conf: 'confidence',
+  review: 'review',
+  reviews: 'review',
 };
 
 /** One line per field, for the syntax help. */
@@ -75,6 +87,21 @@ export const FIELD_HELP: { field: SearchField; aliases: string[]; example: strin
     example: 'rating>=3.5',
     means: 'average review score as shown, on the venue’s scale',
   },
+  { field: 'soundness', aliases: ['sound'], example: 'soundness>=2.5', means: 'average soundness score' },
+  {
+    field: 'informativeness',
+    aliases: ['info', 'informative'],
+    example: 'informativeness>=2',
+    means: 'average informativeness score',
+  },
+  { field: 'presentation', aliases: [], example: 'presentation>=2', means: 'average presentation score' },
+  { field: 'confidence', aliases: ['conf'], example: 'confidence<2', means: 'average reviewer confidence' },
+  {
+    field: 'review',
+    aliases: ['reviews'],
+    example: 'review:"data leakage"',
+    means: 'a review or comment says this, the words in order',
+  },
 ];
 
 export const STATUS_VALUES = ['open', 'closed', 'settled', 'void'] as const;
@@ -94,7 +121,9 @@ export type SearchNode =
   /** A text field: contains (`=`) or does not (`!=`), case-insensitively. */
   | { kind: 'match'; field: (typeof TEXT_FIELDS)[number]; op: '=' | '!='; value: string }
   | { kind: 'status'; op: '=' | '!='; value: StatusValue }
-  /** `value` is a plain decimal string: a percentage, rep, a count, or a mean review rating. */
+  /** What reviewers wrote contains `value` as a phrase, stemmed (`=`), or nothing does (`!=`). */
+  | { kind: 'review'; op: '=' | '!='; value: string }
+  /** `value` is a plain decimal string: a percentage, rep, a count, or a mean review score. */
   | { kind: 'compare'; field: (typeof NUMBER_FIELDS)[number]; op: CompareOp; value: string };
 
 export interface ParsedSearch {
@@ -224,6 +253,13 @@ function fieldNode(tok: Extract<Token, { t: 'field' }>, errors: string[]): Searc
       return null;
     }
     return { kind: 'match', field, op, value };
+  }
+  if (field === 'review') {
+    if (op !== '=' && op !== '!=') {
+      errors.push(`“${tok.raw}”: review takes : or !=`);
+      return null;
+    }
+    return { kind: 'review', op, value };
   }
   if (field === 'status') {
     const v = value.toLowerCase();
@@ -383,6 +419,7 @@ export function parseSearch(input: string): ParsedSearch {
       if (n.kind === 'and' || n.kind === 'or') n.items.forEach(collect);
       else if (n.kind === 'not') collect(n.item);
       else if (n.kind === 'status') fields.add('status');
+      else if (n.kind === 'review') fields.add('review');
       else if (n.kind === 'match' || n.kind === 'compare') fields.add(n.field);
     };
     if (capped.node) collect(capped.node);

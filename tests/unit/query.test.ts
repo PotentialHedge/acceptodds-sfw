@@ -70,6 +70,28 @@ describe('parseSearch', () => {
     expect(errors).toHaveLength(6);
   });
 
+  it('reads the other review scores as number fields', () => {
+    const compare = (field: string, op: string, value: string) => ({ kind: 'compare', field, op, value });
+    expect(parseSearch('soundness>=2.5').node).toEqual(compare('soundness', '>=', '2.5'));
+    expect(parseSearch('info:>2').node).toEqual(compare('informativeness', '>', '2'));
+    expect(parseSearch('Presentation=3').node).toEqual(compare('presentation', '=', '3'));
+    expect(parseSearch('conf<2').node).toEqual(compare('confidence', '<', '2'));
+    expect(parseSearch('soundness>=2').fields.has('soundness')).toBe(true);
+    expect(parseSearch('soundness>good').errors).toHaveLength(1);
+  });
+
+  it('reads review: as a phrase of what reviewers wrote', () => {
+    expect(parseSearch('review:"data leakage"').node).toEqual({ kind: 'review', op: '=', value: 'data leakage' });
+    expect(parseSearch('reviews:leakage').node).toEqual({ kind: 'review', op: '=', value: 'leakage' });
+    expect(parseSearch('review!=leakage').node).toEqual({ kind: 'review', op: '!=', value: 'leakage' });
+    expect(parseSearch('-review:leakage').node).toEqual({
+      kind: 'not',
+      item: { kind: 'review', op: '=', value: 'leakage' },
+    });
+    expect(parseSearch('review>leakage').errors).toHaveLength(1);
+    expect(parseSearch('review:').errors).toHaveLength(1);
+  });
+
   it('reads rating and score as a number field', () => {
     const rating = (op: string, value: string) => ({ kind: 'compare', field: 'rating', op, value });
     expect(parseSearch('rating>=3.5').node).toEqual(rating('>=', '3.5'));

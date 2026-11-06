@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { getDb, type Database } from '@/db';
 import { countBelow } from '@/lib/distribution';
 import { percentAhead } from '@/lib/leaderboard';
-import { atomsOf, densityCurve, roundMean, type Atom } from '@/lib/reviews';
+import { atomsOf, densityCurve, factorOf, roundMean, type Atom, type ReviewFactor } from '@/lib/reviews';
 import { ReadCache } from './read-cache';
 
 /**
@@ -25,6 +25,15 @@ export interface ReviewField {
   ahead: number | null;
 }
 
+/** One score of a paper's, and the field it is placed in: what the chart can switch between. */
+export interface ReviewSeries {
+  label: string;
+  mean: number;
+  /** How many reviews gave it. */
+  count: number;
+  field: ReviewField;
+}
+
 /** One paper alone has nothing to be placed among. */
 const MIN_FIELD = 2;
 const TTL_MS = 10 * 60_000;
@@ -37,13 +46,15 @@ interface Venue {
   means: number[];
 }
 
-const venues = new ReadCache(50);
+const venues = new ReadCache(100);
 
-async function readVenue(kind: string, database: Database): Promise<Venue | null> {
+/** `column` is `rating` or one of `REVIEW_FACTORS`, never input. */
+async function readVenue(kind: string, column: 'rating' | ReviewFactor, database: Database): Promise<Venue | null> {
+  const score = sql.raw(`r.${column}`);
   const { rows } = await database.execute<{ mean: number; lo: number; hi: number }>(sql`
-    select avg(r.rating)::float8 as mean, min(r.rating)::float8 as lo, max(r.rating)::float8 as hi
+    select avg(${score})::float8 as mean, min(${score})::float8 as lo, max(${score})::float8 as hi
       from listing_reviews r join listings l on l.id = r.listing_id
-     where l.kind = ${kind} and r.kind = 'review' and r.rating is not null
+     where l.kind = ${kind} and r.kind = 'review' and ${score} is not null
      group by r.listing_id
   `);
   if (rows.length < MIN_FIELD) return null;
@@ -56,15 +67,14 @@ async function readVenue(kind: string, database: Database): Promise<Venue | null
   return { domain, means, atoms, curve: densityCurve(atoms, domain) };
 }
 
-/** `null` when the paper has no venue or no mean, or its venue is too few or all of one rating. */
-export async function reviewField(
-  kind: string | null,
-  mean: number | null,
-  database: Database = getDb(),
+async function placed(
+  kind: string,
+  column: 'rating' | ReviewFactor,
+  mean: number,
+  database: Database,
 ): Promise<ReviewField | null> {
-  if (kind === null || mean === null) return null;
-  const compute = () => readVenue(kind, database);
-  const venue = await (database === getDb() ? venues.get(kind, TTL_MS, compute) : compute());
+  const compute = () => readVenue(kind, column, database);
+  const venue = await (database === getDb() ? venues.get(`${kind}\n${column}`, TTL_MS, compute) : compute());
   if (!venue) return null;
   return {
     kind,
@@ -73,6 +83,36 @@ export async function reviewField(
     atoms: venue.atoms,
     ahead: percentAhead(countBelow(venue.means, mean), venue.means.length),
   };
+}
+
+/** `null` when the paper has no venue or no mean, or its venue is too few or all of one rating. */
+export async function reviewField(
+  kind: string | null,
+  mean: number | null,
+  database: Database = getDb(),
+): Promise<ReviewField | null> {
+  if (kind === null || mean === null) return null;
+  return placed(kind, 'rating', mean, database);
+}
+
+/**
+ * Where a paper's mean on each of its other scores sits at its venue, each on that score's own scale.
+ * A score that is not one of `REVIEW_FACTORS`, or has no field to sit in, is left out.
+ */
+export async function reviewFactorFields(
+  kind: string | null,
+  paper: readonly { label: string; mean: number; count: number }[],
+  database: Database = getDb(),
+): Promise<ReviewSeries[]> {
+  if (kind === null) return [];
+  const series = await Promise.all(
+    paper.map(async (p) => {
+      const factor = factorOf(p.label);
+      const field = factor && (await placed(kind, factor, p.mean, database));
+      return field && { ...p, field };
+    }),
+  );
+  return series.filter((s) => s !== null);
 }
 
 /** After a test's writes. */

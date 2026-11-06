@@ -12,9 +12,9 @@ import { PaperReviews } from '@/components/PaperReviews';
 import { PAPER_COMMENT_PAGE } from '@/lib/discussion-page';
 import { presentPaperComment } from '@/server/api/present';
 import { listPaperComments } from '@/server/discussion';
-import { reviewField } from '@/server/review-field';
+import { reviewFactorFields, reviewField } from '@/server/review-field';
 import { reviewsOf } from '@/server/reviews';
-import { meanRating } from '@/lib/reviews';
+import { factorMeans, meanRating } from '@/lib/reviews';
 import { CARD, cardPath } from '@/lib/preview-tags';
 import { MathText } from '@/components/MathText';
 import { RememberVenue } from '@/components/RememberVenue';
@@ -103,6 +103,7 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
     listing.kind,
     meanRating(reviews.flatMap((r) => (r.kind === 'review' ? [r.rating] : []))),
   );
+  const reviewFactors = await reviewFactorFields(listing.kind, factorMeans(reviews.filter((r) => r.kind === 'review')));
 
   const viewer = await viewerFromHeaders(await headers());
   const following = viewer ? (await followedListingIds(viewer.account.id)).has(listing.id) : false;
@@ -181,6 +182,7 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
       <PaperReviews
         items={reviews}
         field={reviewStanding}
+        factors={reviewFactors}
         sourceUrl={listing.links.find((l) => l.url.includes('openreview.net/forum'))?.url ?? null}
         figure={1}
       />
