@@ -20,6 +20,7 @@ import { backComment, withdrawBacking } from '../backings';
 import { getComment, listComments, listMentions, listReplies, postComment } from '../comments';
 import { getPaperComment, listPaperComments, listPaperReplies, postPaperComment } from '../discussion';
 import { parseEmoji, reactionsOf, setReaction } from '../reactions';
+import { reviewsOf, setReviews } from '../reviews';
 import { mailMentions } from '../mentions';
 import { follow, followedListings, setDigestOptIn, setMentionMailOptIn, unfollow } from '../follows';
 import {
@@ -248,6 +249,34 @@ export const getListingRelated = route(async (req, params) => {
   const principal = await authenticate(req);
   const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
   return respond(S.ListingRelated, presentRelated(await listingRelatedTo(listing)), { principal });
+});
+
+/** A listing's reviews and comments as supplied, oldest first. Public, as the paper page that shows them is. */
+export const getListingReviews = route(async (req, params) => {
+  const principal = await authenticate(req);
+  const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
+  const reviews = (await reviewsOf(listing.id)).map((r) => ({
+    externalId: r.externalId,
+    kind: r.kind,
+    replyTo: r.replyTo,
+    author: r.author,
+    title: r.title,
+    rating: r.rating,
+    scores: r.scores,
+    sections: r.sections,
+    license: r.license,
+    postedAt: toIsoOrNull(r.postedAt),
+  }));
+  return respond(S.ListingReviews, { listingId: listing.id, reviews }, { principal });
+});
+
+/** Replace a listing's reviews and comments, whole. Written by `reviews.ts`; not market state. */
+export const putListingReviews = route(async (req, params) => {
+  const principal = await requireAuth(req, 'admin');
+  const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
+  const body = await parseBody(req, S.SetReviewsRequest);
+  const counts = await setReviews(listing, body.reviews);
+  return respond(S.SetReviewsResult, { listingId: listing.id, ...counts }, { principal });
 });
 
 /**

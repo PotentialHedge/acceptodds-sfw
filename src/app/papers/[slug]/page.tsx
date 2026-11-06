@@ -8,11 +8,15 @@ import { AddToReadingList, ReadEye } from '@/components/ReadingList';
 import { groupsOf } from '@/server/groups';
 import { FollowStar } from '@/components/FollowStar';
 import { PaperDiscussion } from '@/components/PaperDiscussion';
+import { PaperReviews } from '@/components/PaperReviews';
 import { Reactions } from '@/components/Reactions';
 import { PAPER_COMMENT_PAGE } from '@/lib/discussion-page';
 import { presentPaperComment } from '@/server/api/present';
 import { listPaperComments } from '@/server/discussion';
 import { reactionsOf } from '@/server/reactions';
+import { reviewField } from '@/server/review-field';
+import { reviewsOf } from '@/server/reviews';
+import { meanRating } from '@/lib/reviews';
 import { MathText } from '@/components/MathText';
 import { RememberVenue } from '@/components/RememberVenue';
 import { RunningHead } from '@/components/RunningHead';
@@ -68,8 +72,8 @@ function paperJsonLd(l: Listing) {
  * A listing's page. The platform calls it a listing and knows nothing about
  * what it is; the UI calls it a paper, because that is what `../research`
  * lists. Title, names, links and summary are shown as the client supplied
- * them. Safe for work edition: no markets below them, only the related
- * papers (with the minimap) and the citations.
+ * them. Safe for work edition: no markets below them, only its reviews, the
+ * related papers (with the minimap) and the citations.
  */
 export default async function PaperPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -81,12 +85,17 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
     throw err;
   }
   // The minimap itself is the browser's to fetch, once it scrolls into view: here only whether there is one.
-  const [{ markets, followers }, citations, related, mapped] = await Promise.all([
+  const [{ markets, followers }, citations, related, mapped, reviews] = await Promise.all([
     listingView(listing),
     listingCitations(listing),
     listingRelatedTo(listing),
     onMap(listing),
+    reviewsOf(listing.id),
   ]);
+  const reviewStanding = await reviewField(
+    listing.kind,
+    meanRating(reviews.flatMap((r) => (r.kind === 'review' ? [r.rating] : []))),
+  );
 
   const viewer = await viewerFromHeaders(await headers());
   const following = viewer ? (await followedListingIds(viewer.account.id)).has(listing.id) : false;
@@ -105,7 +114,7 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
     <RelatedPapers
       related={related}
       minimapOf={mapped ? listing.slug : null}
-      figure={1}
+      figure={reviewStanding ? 2 : 1}
       unlock={null}
       venue={listing.kind}
     />
@@ -163,6 +172,13 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
         </div>
         <Reactions listingId={listing.id} initial={reactions} signedIn={viewer !== null} />
       </TitleBlock>
+
+      <PaperReviews
+        items={reviews}
+        field={reviewStanding}
+        sourceUrl={listing.links.find((l) => l.url.includes('openreview.net/forum'))?.url ?? null}
+        figure={1}
+      />
 
       {relatedPapers}
 

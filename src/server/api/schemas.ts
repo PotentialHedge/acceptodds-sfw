@@ -1226,6 +1226,66 @@ export const ListingText = z
   })
   .meta({ id: 'ListingText' });
 
+const ReviewScoreBody = z.object({ label: z.string().min(1).max(100), value: z.number().finite() });
+/** Postgres cannot store a NUL, in `text` or in `jsonb`: a 400 here, not a 500 at the insert. */
+const noNul = (x: string) => !x.includes('\0');
+const ReviewSectionBody = z.object({
+  label: z.string().max(100).refine(noNul, 'contains a NUL'),
+  text: z.string().max(100_000).refine(noNul, 'contains a NUL'),
+});
+
+export const SetReviewsRequest = z
+  .object({
+    reviews: z
+      .array(
+        z.object({
+          externalId: z.string().min(1).max(200).meta({ description: 'The supplier’s id; unique on the listing.' }),
+          kind: z.enum(['review', 'comment']),
+          replyTo: z
+            .string()
+            .max(200)
+            .nullish()
+            .meta({ description: 'The `externalId` it answers. Left out, it answers the listing itself.' }),
+          author: z.string().max(200).nullish().meta({ description: 'As signed at the source. Display only.' }),
+          title: z.string().max(1000).refine(noNul, 'contains a NUL').nullish(),
+          rating: z.number().finite().nullish().meta({
+            description: 'The overall score, on the venue’s own scale. A review without one is left out of the field.',
+          }),
+          scores: z.array(ReviewScoreBody).max(50).default([]),
+          sections: z.array(ReviewSectionBody).max(50).default([]),
+          license: z.string().max(100).nullish(),
+          postedAt: Timestamp.nullish(),
+        }),
+      )
+      .max(5000)
+      .refine((xs) => new Set(xs.map((x) => x.externalId)).size === xs.length, 'externalId repeats')
+      .meta({ description: 'Replaced whole; empty clears them.' }),
+  })
+  .meta({ id: 'SetReviewsRequest' });
+
+export const SetReviewsResult = z
+  .object({ listingId: Id, reviews: z.number().int().min(0), comments: z.number().int().min(0) })
+  .meta({ id: 'SetReviewsResult' });
+
+export const ListingReviewEntry = z
+  .object({
+    externalId: z.string(),
+    kind: z.enum(['review', 'comment']),
+    replyTo: z.string().nullable(),
+    author: z.string().nullable(),
+    title: z.string().nullable(),
+    rating: z.number().nullable(),
+    scores: z.array(ReviewScoreBody),
+    sections: z.array(ReviewSectionBody),
+    license: z.string().nullable(),
+    postedAt: Timestamp.nullable(),
+  })
+  .meta({ id: 'ListingReviewEntry' });
+
+export const ListingReviews = z
+  .object({ listingId: Id, reviews: z.array(ListingReviewEntry) })
+  .meta({ id: 'ListingReviews' });
+
 export const SetRelatedRequest = z
   .object({
     related: z

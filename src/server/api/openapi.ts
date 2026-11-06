@@ -255,6 +255,38 @@ export function buildRegistry(): OpenAPIRegistry {
     }),
   );
 
+  r.registerPath(
+    op({
+      method: 'get',
+      path: '/listings/{id}/reviews',
+      tags: ['listings'],
+      summary: 'A listing’s reviews and comments',
+      description:
+        'What its reviewers and commenters wrote at the venue it came from, as the listing’s publisher supplied it, oldest first. Not this site’s discussion, which is `/listings/{id}/comments`.',
+      request: { params: z.object({ id: S.ListingRef }) },
+      ok: { status: 200, schema: S.ListingReviews, description: 'The reviews and comments.' },
+      errors: { 404: 'not_found' },
+    }),
+  );
+
+  r.registerPath(
+    op({
+      method: 'put',
+      path: '/listings/{id}/reviews',
+      tags: ['listings'],
+      summary: 'Set a listing’s reviews and comments',
+      description:
+        'Replaces them whole; empty clears them. Its own call, so a client that writes listings never clears them.',
+      scope: 'admin',
+      request: {
+        params: z.object({ id: S.ListingRef }),
+        body: { content: { 'application/json': { schema: S.SetReviewsRequest } } },
+      },
+      ok: { status: 200, schema: S.SetReviewsResult, description: 'How many of each are stored.' },
+      errors: { 400: 'validation_error', 404: 'not_found' },
+    }),
+  );
+
   for (const method of ['put', 'delete'] as const) {
     r.registerPath(
       op({

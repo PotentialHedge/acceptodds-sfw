@@ -36,6 +36,7 @@ import * as listingClosedRoute from '@/app/api/v1/listings/[id]/closed/route';
 import * as listingViewRoute from '@/app/api/v1/listings/[id]/view/route';
 import * as listingCitationsRoute from '@/app/api/v1/listings/[id]/citations/route';
 import * as listingRelatedRoute from '@/app/api/v1/listings/[id]/related/route';
+import * as listingReviewsRoute from '@/app/api/v1/listings/[id]/reviews/route';
 import * as listingMinimapRoute from '@/app/api/v1/listings/[id]/minimap/route';
 import * as mapRoute from '@/app/api/v1/map/route';
 import * as mapSearchRoute from '@/app/api/v1/map/search/route';
@@ -112,6 +113,7 @@ const ROUTES: [pattern: string, mod: Mod][] = [
   ['/listings/[id]/view', listingViewRoute],
   ['/listings/[id]/citations', listingCitationsRoute],
   ['/listings/[id]/related', listingRelatedRoute],
+  ['/listings/[id]/reviews', listingReviewsRoute],
   ['/listings/[id]/minimap', listingMinimapRoute],
   ['/map', mapRoute],
   ['/map/search', mapSearchRoute],

@@ -247,6 +247,71 @@ export const listingTexts = pgTable('listing_texts', {
 });
 
 /**
+ * What a listing's reviewers and commenters wrote at its own venue (for a
+ * paper, its OpenReview reviews and comments), supplied whole by `../research`
+ * per listing (`PUT /listings/{id}/reviews`) and written only by
+ * `server/reviews.ts`. Not the venue's discussion: that is `comments`, written
+ * by this site's users. Attribution travels with each row, since what it holds
+ * is someone else's licensed writing.
+ *
+ * A row keeps `rating` apart from the rest of its scores because the review
+ * field (`server/review-field.ts`) reads it for every paper at a venue; the
+ * partial index below is that read.
+ */
+export const listingReviews = pgTable(
+  'listing_reviews',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    listingId: uuid('listing_id')
+      .notNull()
+      .references(() => listings.id, { onDelete: 'cascade' }),
+    /** The supplier's id for it, unique on its listing. `reply_to` refers to these. */
+    externalId: text('external_id').notNull(),
+    kind: text('kind', { enum: ['review', 'comment'] }).notNull(),
+    /** The `external_id` it answers, matched when read; null when it answers the paper itself. */
+    replyTo: text('reply_to'),
+    /** As signed at the source, e.g. `Reviewer_B3x7` or `Authors`. Display only. */
+    author: text('author'),
+    title: text('title'),
+    /** The overall score, on the venue's own scale. Null on a comment, and on a review without one. */
+    rating: doublePrecision('rating'),
+    /** `[{ label, value }]`, in the supplier's order: the other scores. */
+    scores: jsonb('scores')
+      .$type<ListingReviewScore[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** `[{ label, text }]`, in the supplier's order; `text` is Markdown and untrusted. */
+    sections: jsonb('sections')
+      .$type<ListingReviewSection[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** e.g. `CC BY 4.0`, as the source states it. */
+    license: text('license'),
+    /** When it was posted at the source. */
+    postedAt: timestamp('posted_at', { withTimezone: true, mode: 'date' }),
+  },
+  (t) => [
+    uniqueIndex('listing_reviews_external_key').on(t.listingId, t.externalId),
+    index('listing_reviews_rated_idx')
+      .on(t.listingId, t.rating)
+      .where(sql`${t.kind} = 'review' and ${t.rating} is not null`),
+    check('listing_reviews_kind_check', sql`${t.kind} in ('review', 'comment')`),
+  ],
+);
+
+export interface ListingReviewScore {
+  label: string;
+  value: number;
+}
+
+export interface ListingReviewSection {
+  label: string;
+  text: string;
+}
+
+export type ListingReview = typeof listingReviews.$inferSelect;
+
+/**
  * A listing's bibliography (#38): what the paper cites, in its own order,
  * supplied whole by `../research` with the listing (`POST /listings`
  * replaces the list) and written only by `server/listings.ts`, in the
