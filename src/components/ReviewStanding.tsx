@@ -72,7 +72,7 @@ export function ReviewFigure({
           : 'Too few of these papers have reviews to draw.';
   return (
     <figure className="my-3">
-      <div className="flex flex-wrap justify-between gap-x-6 gap-y-1 font-sans text-xs text-muted">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 font-sans text-xs text-muted">
         <div className="flex flex-wrap gap-x-3">
           <span>Among:</span>
           <Pick on={among === 'venue'} onClick={() => setAmong('venue')}>
@@ -87,13 +87,18 @@ export function ReviewFigure({
           {note && <span className="italic">{note}</span>}
         </div>
         {shown.length > 1 && (
-          <div className="flex flex-wrap gap-x-3">
+          <select
+            aria-label="Score"
+            value={at.label}
+            onChange={(e) => setSelected(e.target.value)}
+            className="cursor-pointer border border-rule bg-card px-1.5 py-0.5 text-ink"
+          >
             {shown.map((s) => (
-              <Pick key={s.label} on={s === at} onClick={() => setSelected(s.label)}>
+              <option key={s.label} value={s.label}>
                 {s.label}
-              </Pick>
+              </option>
             ))}
-          </div>
+          </select>
         )}
       </div>
       {cohort && <CohortKey cohort={cohort.cohort} field={at.field} />}
