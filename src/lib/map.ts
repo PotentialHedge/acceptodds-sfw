@@ -152,6 +152,37 @@ export function headlineRgb(h: number | null): Rgb {
   return h === null ? MAP_NONE : LIKELIHOOD_RGB[likelihood(h)];
 }
 
+/** Blue above a venue's middle and orange below it, grey between: tell apart with any colour vision, and not the selection's maroon. */
+export const SCORE_LOW: Rgb = hexRgb('#b0602c');
+export const SCORE_MID: Rgb = hexRgb('#aaa79e');
+export const SCORE_HIGH: Rgb = hexRgb('#2f6f9f');
+
+/** Where a score's colours are pinned: its 5th percentile, median and 95th percentile. */
+export interface ScoreStops {
+  lo: number;
+  mid: number;
+  hi: number;
+}
+
+/**
+ * The stops of a score's values, `null` when there are none. Pinned to percentiles and not to the scale, since
+ * papers' means bunch in the middle of it: a few outliers would otherwise leave the map all one grey.
+ */
+export function scoreStops(values: readonly (number | null)[]): ScoreStops | null {
+  const xs = values.filter((v): v is number => v !== null).sort((a, b) => a - b);
+  if (xs.length === 0) return null;
+  const at = (q: number) => xs[Math.round((xs.length - 1) * q)];
+  return { lo: at(0.05), mid: at(0.5), hi: at(0.95) };
+}
+
+/** A paper's colour on a score: grey at the median, fully blue or orange from the stops out. */
+export function scoreRgb(v: number, { lo, mid, hi }: ScoreStops): Rgb {
+  const t = v < mid ? (mid - v) / (mid - lo || 1) : (v - mid) / (hi - mid || 1);
+  const pole = v < mid ? SCORE_LOW : SCORE_HIGH;
+  const k = Math.min(1, t);
+  return [0, 1, 2].map((c) => Math.round(SCORE_MID[c] + (pole[c] - SCORE_MID[c]) * k)) as Rgb;
+}
+
 /**
  * Dot radius multiplier at a zoom level: about 1.5x per level past the
  * opening view, never smaller than at it, capped so dense regions stay

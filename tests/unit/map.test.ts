@@ -13,6 +13,11 @@ import {
   MINIMAP_STRETCH,
   minimapRadius,
   normalise,
+  SCORE_HIGH,
+  SCORE_LOW,
+  SCORE_MID,
+  scoreRgb,
+  scoreStops,
   topicLabels,
 } from '@/lib/map';
 
@@ -137,5 +142,24 @@ describe('labelTerms and labelMatches', () => {
     expect(labelMatches('Paragraphs', ['graph'])).toBe(false);
     expect(labelMatches('Score-based Diffusion Models', ['diffusion model'])).toBe(true);
     expect(labelMatches('Anything', [])).toBe(false);
+  });
+});
+
+describe('score colours', () => {
+  it('pins to the percentiles and skips papers without a score', () => {
+    const values = [...Array.from({ length: 101 }, (_, i) => i), null];
+    expect(scoreStops(values)).toEqual({ lo: 5, mid: 50, hi: 95 });
+    expect(scoreStops([null])).toBeNull();
+  });
+
+  it('runs low to high through the middle grey, clamped at the stops', () => {
+    const stops = { lo: 1, mid: 2, hi: 3 };
+    expect(scoreRgb(0, stops)).toEqual(SCORE_LOW);
+    expect(scoreRgb(2, stops)).toEqual(SCORE_MID);
+    expect(scoreRgb(4, stops)).toEqual(SCORE_HIGH);
+  });
+
+  it('does not divide by zero when every paper has the same score', () => {
+    expect(scoreRgb(2, { lo: 2, mid: 2, hi: 2 })).toEqual(SCORE_MID);
   });
 });

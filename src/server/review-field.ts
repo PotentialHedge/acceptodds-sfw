@@ -1,9 +1,27 @@
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { getDb, type Database } from '@/db';
 import { countBelow } from '@/lib/distribution';
 import { percentAhead } from '@/lib/leaderboard';
-import { atomsOf, densityCurve, factorOf, roundMean, type Atom, type ReviewFactor } from '@/lib/reviews';
+import {
+  atomsOf,
+  COHORT_BANDWIDTH,
+  densityCurve,
+  factorMeans,
+  factorOf,
+  meanRating,
+  MIN_COHORT,
+  NEAREST_COHORT,
+  OVERALL,
+  REVIEW_FACTORS,
+  roundMean,
+  type Atom,
+  type ReviewCohort,
+  type ReviewFactor,
+} from '@/lib/reviews';
+import { listingRelated, listings, type Listing } from '@/db/schema';
 import { ReadCache } from './read-cache';
+import { reviewsOf } from './reviews';
+import { nearestIn, vectorIndexes } from './vector-index';
 
 /**
  * Where a paper's mean review rating sits among the reviewed papers at its
@@ -23,6 +41,10 @@ export interface ReviewField {
   atoms: Atom[];
   /** The share of the other reviewed papers strictly below this one, rounded down. */
   ahead: number | null;
+  /** How many papers the field is of. */
+  papers: number;
+  /** On a cohort, the shape of the whole venue on the same scale, to compare by eye. */
+  reference?: number[];
 }
 
 /** One score of a paper's, and the field it is placed in: what the chart can switch between. */
@@ -82,6 +104,7 @@ async function placed(
     curve: venue.curve,
     atoms: venue.atoms,
     ahead: percentAhead(countBelow(venue.means, mean), venue.means.length),
+    papers: venue.means.length,
   };
 }
 
@@ -113,6 +136,103 @@ export async function reviewFactorFields(
     }),
   );
   return series.filter((s) => s !== null);
+}
+
+/** A cohort's scores on one paper's other papers, each on its venue's scale. */
+export interface ReviewCohortView {
+  cohort: ReviewCohort;
+  series: ReviewSeries[];
+}
+
+/** A curve is drawn, not read: four places are plenty, and it goes over the wire for every score. */
+const curveToSend = (curve: number[]) => curve.map((y) => Math.round(y * 1e4) / 1e4);
+
+/** The `NEAREST_COHORT` papers nearest this one by the map's vectors. Empty when it has no vector. */
+async function nearestIds(listingId: string, database: Database): Promise<string[]> {
+  const index = (await vectorIndexes(database)).find((i) => i.row.has(listingId));
+  return index ? nearestIn(index, listingId, NEAREST_COHORT) : [];
+}
+
+async function relatedIds(listingId: string, database: Database): Promise<string[]> {
+  const rows = await database
+    .select({ id: listings.id })
+    .from(listingRelated)
+    .innerJoin(listings, eq(listings.slug, listingRelated.relatedSlug))
+    .where(eq(listingRelated.listingId, listingId));
+  return rows.map((r) => r.id);
+}
+
+/**
+ * Where a paper's mean on each score sits among the papers nearest it in
+ * embedding space, and among its related papers, on its venue's scale. Only
+ * reviewed papers at its venue count, never the paper itself. A cohort with fewer than
+ * `MIN_COHORT` reviewed papers on a score leaves that score out, and with none
+ * left the cohort is left out. Vectors and relatedness are the similarity
+ * service's; a mean is the same as the venue field's.
+ */
+export async function reviewCohorts(listing: Listing, database: Database = getDb()): Promise<ReviewCohortView[]> {
+  const kind = listing.kind;
+  if (kind === null) return [];
+  const reviews = (await reviewsOf(listing.id, database)).filter((r) => r.kind === 'review');
+  const mean = meanRating(reviews.map((r) => r.rating));
+  const own = [
+    ...(mean === null
+      ? []
+      : [{ label: OVERALL, mean, count: reviews.filter((r) => r.rating !== null).length, column: 'rating' as const }]),
+    ...factorMeans(reviews).flatMap((f) => {
+      const column = factorOf(f.label);
+      return column ? [{ ...f, column }] : [];
+    }),
+  ];
+  if (own.length === 0) return [];
+
+  const [nearest, related] = await Promise.all([nearestIds(listing.id, database), relatedIds(listing.id, database)]);
+  const ids = [...new Set([...nearest, ...related])].filter((id) => id !== listing.id);
+  if (ids.length === 0) return [];
+  const columns = sql.raw(REVIEW_FACTORS.map((f) => `avg(r.${f})::float8 as ${f}`).join(', '));
+  const { rows } = await database.execute<{ id: string } & Record<'rating' | ReviewFactor, number | null>>(sql`
+    select r.listing_id as id, avg(r.rating)::float8 as rating, ${columns}
+      from listing_reviews r join listings l on l.id = r.listing_id
+     where l.kind = ${kind} and r.kind = 'review'
+       and r.listing_id in (${sql.join(
+         ids.map((id) => sql`${id}::uuid`),
+         sql`, `,
+       )})
+     group by r.listing_id
+  `);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  const compute = async (cohort: ReviewCohort, members: string[]): Promise<ReviewCohortView | null> => {
+    const series = await Promise.all(
+      own.map(async ({ label, mean, count, column }) => {
+        const venue = await placed(kind, column, mean, database);
+        if (!venue) return null;
+        const means = members
+          .flatMap((id) => {
+            const m = byId.get(id)?.[column];
+            return m === null || m === undefined ? [] : [roundMean(m)];
+          })
+          .sort((a, b) => a - b);
+        if (means.length < MIN_COHORT) return null;
+        const atoms = atomsOf(means);
+        const field: ReviewField = {
+          kind,
+          domain: venue.domain,
+          curve: curveToSend(densityCurve(atoms, venue.domain, COHORT_BANDWIDTH)),
+          atoms,
+          // `means` leaves the paper out, and `percentAhead` is told the field with it.
+          ahead: percentAhead(countBelow(means, mean), means.length + 1),
+          papers: means.length,
+          reference: curveToSend(venue.curve),
+        };
+        return { label, mean, count, field };
+      }),
+    );
+    const drawn = series.filter((s) => s !== null);
+    return drawn.length > 0 ? { cohort, series: drawn } : null;
+  };
+  const cohorts = await Promise.all([compute('nearest', nearest), compute('related', related)]);
+  return cohorts.filter((c) => c !== null);
 }
 
 /** After a test's writes. */

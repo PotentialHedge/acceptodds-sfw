@@ -51,6 +51,16 @@ export function factorMeans(
     .sort((a, b) => rank(a.label) - rank(b.label) || a.label.localeCompare(b.label));
 }
 
+/** The groups of papers a paper's scores can be placed among besides its whole venue. */
+export const REVIEW_COHORTS = ['nearest', 'related'] as const;
+export type ReviewCohort = (typeof REVIEW_COHORTS)[number];
+/** How many papers nearest in embedding space make up the `nearest` cohort. */
+export const NEAREST_COHORT = 100;
+/** Fewer reviewed papers than this are too few to draw a shape from. */
+export const MIN_COHORT = 5;
+/** The kernel's width for a cohort, as a share of the scale. */
+export const COHORT_BANDWIDTH = 0.09;
+
 /** Where a curve is sampled across the scale. */
 export const CURVE_POINTS = 121;
 
@@ -87,10 +97,17 @@ export function shareBelow(atoms: readonly Atom[], x: number): number {
   return sum;
 }
 
-/** The Gaussian kernel density of `atoms` at `CURVE_POINTS` even points across `domain`, scaled to peak at 1. */
-export function densityCurve(atoms: readonly Atom[], domain: readonly [number, number]): number[] {
+/**
+ * The Gaussian kernel density of `atoms` at `CURVE_POINTS` even points across `domain`, scaled to peak at 1.
+ * `bandwidth`, as a share of the scale: a handful of papers needs a wider kernel than a venue's thousands.
+ */
+export function densityCurve(
+  atoms: readonly Atom[],
+  domain: readonly [number, number],
+  bandwidth = BANDWIDTH_OF_SCALE,
+): number[] {
   const [lo, hi] = domain;
-  const h = (hi - lo) * BANDWIDTH_OF_SCALE;
+  const h = (hi - lo) * bandwidth;
   const ys = Array.from({ length: CURVE_POINTS }, (_, i) => {
     const x = lo + ((hi - lo) * i) / (CURVE_POINTS - 1);
     return atoms.reduce((sum, [mean, share]) => sum + share * Math.exp(-0.5 * ((x - mean) / h) ** 2), 0);

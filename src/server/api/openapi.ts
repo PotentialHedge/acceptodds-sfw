@@ -211,6 +211,20 @@ export function buildRegistry(): OpenAPIRegistry {
   r.registerPath(
     op({
       method: 'get',
+      path: '/listings/{id}/review-cohorts',
+      tags: ['listings'],
+      summary: 'A listing’s scores among similar papers',
+      description:
+        'Where a listing’s review scores sit among the papers nearest it in embedding space and among its related papers. Public, cached for five minutes.',
+      request: { params: z.object({ id: S.ListingRef }) },
+      ok: { status: 200, schema: S.ReviewCohorts, description: 'The cohorts.' },
+      errors: { 404: 'not_found' },
+    }),
+  );
+
+  r.registerPath(
+    op({
+      method: 'get',
       path: '/listings/{id}/minimap',
       tags: ['listings'],
       summary: 'A listing’s piece of the paper map',
@@ -347,6 +361,19 @@ export function buildRegistry(): OpenAPIRegistry {
         'The title of every listing on a venue’s map, by slug: what `GET /map` leaves out, so a client can draw the map before they arrive. Public, cached for five minutes.',
       request: { query: S.MapQuery },
       ok: { status: 200, schema: S.MapTitles, description: 'The titles.' },
+    }),
+  );
+
+  r.registerPath(
+    op({
+      method: 'get',
+      path: '/map/scores',
+      tags: ['listings'],
+      summary: 'Review scores of the papers on the map',
+      description:
+        'Each reviewed listing on a venue’s map with its mean on each review score, by column. Public, cached for five minutes.',
+      request: { query: S.MapQuery },
+      ok: { status: 200, schema: S.MapScores, description: 'The means.' },
     }),
   );
 

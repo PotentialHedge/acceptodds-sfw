@@ -38,6 +38,7 @@ export function StandingChart({
   label,
   other = null,
   marks = [],
+  reference,
   format,
 }: {
   /** The density at evenly spaced points across `domain`, root-scaled to peak at 1. */
@@ -54,6 +55,8 @@ export function StandingChart({
   other?: { value: number; label: string } | null;
   /** More traders to mark, in the same units, each named only on hover. */
   marks?: readonly { value: number; label: string }[];
+  /** Another density at the same points, drawn dashed behind for comparison. */
+  reference?: readonly number[];
   /** What the chart is of: its axis, its hover readout and its name to a screen reader. */
   format?: { tick: (x: number) => string; ticks?: number[]; readout: (x: number) => ReactNode; ariaLabel: string };
 }) {
@@ -136,6 +139,15 @@ export function StandingChart({
             </clipPath>
             <path d={area} clipPath="url(#standing-below)" className="fill-accent opacity-15" />
           </>
+        )}
+        {reference && (
+          <path
+            d={reference.map((y, i) => `${i ? 'L' : 'M'}${sx(d.xs[i]).toFixed(1)},${sy(y).toFixed(1)}`).join('')}
+            fill="none"
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+            className="stroke-muted"
+          />
         )}
         <path d={line} fill="none" strokeWidth={2} strokeLinejoin="round" className="stroke-subtle" />
         <line x1={PAD.left} x2={width - PAD.right} y1={base} y2={base} strokeWidth={1} className="stroke-rule-strong" />

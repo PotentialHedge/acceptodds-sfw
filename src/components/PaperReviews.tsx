@@ -22,6 +22,7 @@ export function PaperReviews({
   factors,
   sourceUrl,
   figure,
+  slug,
 }: {
   items: ListingReview[];
   field: ReviewField | null;
@@ -29,6 +30,8 @@ export function PaperReviews({
   factors: ReviewSeries[];
   sourceUrl: string | null;
   figure: number;
+  /** The paper's slug, to fetch its nearest and related papers' scores with. */
+  slug: string;
 }) {
   if (items.length === 0) return null;
   const { reviews, loose } = threadReviews(items);
@@ -39,7 +42,11 @@ export function PaperReviews({
     <section>
       <h3 className={ui.groupHeading}>Reviews</h3>
       {field && mean !== null && (
-        <ReviewFigure figure={figure} series={[{ label: OVERALL, mean, count: rated, field }, ...factors]} />
+        <ReviewFigure
+          figure={figure}
+          slug={slug}
+          series={[{ label: OVERALL, mean, count: rated, field }, ...factors]}
+        />
       )}
       {reviews.map(({ review, comments }) => (
         <article key={review.externalId} className="mt-5 border-t border-rule pt-3">

@@ -185,6 +185,7 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
         factors={reviewFactors}
         sourceUrl={listing.links.find((l) => l.url.includes('openreview.net/forum'))?.url ?? null}
         figure={1}
+        slug={listing.slug}
       />
 
       {relatedPapers}

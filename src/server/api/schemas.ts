@@ -1,3 +1,4 @@
+import { REVIEW_COHORTS } from '@/lib/reviews';
 import { z } from 'zod';
 import { SEARCH_MAX_LENGTH } from '@/lib/search';
 import { TOKEN_SCOPES } from '../tokens';
@@ -306,6 +307,57 @@ export const PaperMap = z
 export const MapTitles = z
   .object({ titles: z.record(z.string(), z.string()).meta({ description: 'Each listing’s title, by slug.' }) })
   .meta({ id: 'MapTitles', description: 'The title of every listing on the paper map.' });
+
+const mapScoreColumn = column(z.number().nullable(), 'The paper’s mean on this score; `null` if no review gave it.');
+export const MapScores = z
+  .object({
+    slugs: column(z.string(), 'Every reviewed listing on the map, by slug. Index `i` of every score is this listing.'),
+    scores: z.object({
+      rating: mapScoreColumn,
+      soundness: mapScoreColumn,
+      informativeness: mapScoreColumn,
+      presentation: mapScoreColumn,
+      confidence: mapScoreColumn,
+    }),
+  })
+  .meta({ id: 'MapScores', description: 'Each reviewed listing’s mean on each review score, by column.' });
+
+const CohortField = z.object({
+  kind: Kind,
+  domain: z.tuple([z.number(), z.number()]).meta({ description: 'The venue’s scale.' }),
+  curve: z.array(z.number()).meta({ description: 'The cohort’s density across `domain`, peaking at 1.' }),
+  atoms: z
+    .array(z.tuple([z.number(), z.number()]).readonly())
+    .meta({ description: 'Each distinct mean with its share of the cohort, ascending.' }),
+  ahead: z
+    .number()
+    .nullable()
+    .meta({ description: 'Percent of the cohort strictly below this listing, rounded down.' }),
+  papers: z.number().int().min(0).meta({ description: 'Reviewed papers in the cohort on this score.' }),
+  reference: z.array(z.number()).optional().meta({ description: 'The whole venue’s density on the same scale.' }),
+});
+
+export const ReviewCohorts = z
+  .object({
+    cohorts: z.array(
+      z.object({
+        cohort: z.enum(REVIEW_COHORTS),
+        series: z.array(
+          z.object({
+            label: z.string(),
+            mean: z.number().meta({ description: 'This listing’s mean on the score.' }),
+            count: z.number().int().min(0).meta({ description: 'Reviews of this listing that gave it.' }),
+            field: CohortField,
+          }),
+        ),
+      }),
+    ),
+  })
+  .meta({
+    id: 'ReviewCohorts',
+    description:
+      'Where a listing’s review scores sit among the papers nearest it in embedding space and among its related papers. A cohort with too few reviewed papers is left out.',
+  });
 
 export const Minimap = z
   .object({

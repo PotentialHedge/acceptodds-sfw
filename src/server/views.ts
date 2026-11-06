@@ -755,6 +755,39 @@ export async function mapTitles(kind: string, database: Database = getDb()): Pro
   return Object.fromEntries(rows.map((r) => [r.slug, r.title]));
 }
 
+/** A venue's reviewed papers on its map, with their mean on each score, by column; index `i` of each is one paper. */
+export interface MapScores {
+  slugs: string[];
+  scores: Record<'rating' | ReviewFactor, (number | null)[]>;
+}
+
+/** What colouring the map by a score reads: no paper's reviews, only its means. Papers without a review are left out. */
+export async function mapScores(kind: string, database: Database = getDb()): Promise<MapScores> {
+  const columns = ['rating', ...REVIEW_FACTORS] as const;
+  const means = sql.raw(columns.map((c) => `avg(r.${c})::float8 as ${c}`).join(', '));
+  const { rows } = await database.execute<{ slug: string } & Record<(typeof columns)[number], number | null>>(sql`
+    select l.slug, ${means}
+      from map_points p
+      join listings l on l.slug = p.slug
+      join listing_reviews r on r.listing_id = l.id and r.kind = 'review'
+     where p.kind = ${kind}
+     group by l.slug
+     order by l.slug
+  `);
+  const column = (c: (typeof columns)[number]) =>
+    rows.map((r) => (r[c] === null ? null : Math.round(r[c] * 1000) / 1000));
+  return {
+    slugs: rows.map((r) => r.slug),
+    scores: {
+      rating: column('rating'),
+      soundness: column('soundness'),
+      informativeness: column('informativeness'),
+      presentation: column('presentation'),
+      confidence: column('confidence'),
+    },
+  };
+}
+
 export interface Minimap {
   /** The paper itself, its `MINIMAP_NEAREST` nearest papers and its related papers on the map. */
   points: MapPointView[];

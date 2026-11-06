@@ -41,7 +41,9 @@ import * as listingMinimapRoute from '@/app/api/v1/listings/[id]/minimap/route';
 import * as mapRoute from '@/app/api/v1/map/route';
 import * as mapSearchRoute from '@/app/api/v1/map/search/route';
 import * as mapRelatedRoute from '@/app/api/v1/map/related/route';
+import * as mapScoresRoute from '@/app/api/v1/map/scores/route';
 import * as mapTitlesRoute from '@/app/api/v1/map/titles/route';
+import * as listingReviewCohortsRoute from '@/app/api/v1/listings/[id]/review-cohorts/route';
 import * as announcementsRoute from '@/app/api/v1/announcements/route';
 import * as announcementRoute from '@/app/api/v1/announcements/[id]/route';
 import * as transitionsRoute from '@/app/api/v1/transitions/route';
@@ -118,7 +120,9 @@ const ROUTES: [pattern: string, mod: Mod][] = [
   ['/map', mapRoute],
   ['/map/search', mapSearchRoute],
   ['/map/related', mapRelatedRoute],
+  ['/map/scores', mapScoresRoute],
   ['/map/titles', mapTitlesRoute],
+  ['/listings/[id]/review-cohorts', listingReviewCohortsRoute],
   ['/announcements', announcementsRoute],
   ['/announcements/[id]', announcementRoute],
   ['/transitions', transitionsRoute],

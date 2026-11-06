@@ -65,6 +65,7 @@ import {
   marketTape,
   marketView,
   mapRelated,
+  mapScores,
   mapTitles,
   mapSearch,
   paperMap,
@@ -73,6 +74,7 @@ import {
   resolveListing,
   resolveMarket,
 } from '../views';
+import { reviewCohorts } from '../review-field';
 import { ApiError } from './errors';
 import {
   clientIp,
@@ -355,6 +357,16 @@ export const getMapTitles = route(async (req) => {
   return preparedResponse(req, prepared, { principal, headers: { 'Cache-Control': MAP_CACHE_CONTROL } });
 });
 
+/** Each reviewed paper's mean on each score, fetched only when the map is coloured by one. Public, cached like the map. */
+export const getMapScores = route(async (req) => {
+  const principal = await authenticate(req);
+  const kind = parseQuery(req, S.MapQuery).kind ?? defaultMarketKind();
+  const prepared = await mapCached(`map/scores:${kind}`, MAP_TTL_MS, async () =>
+    prepare(S.MapScores, await mapScores(kind)),
+  );
+  return preparedResponse(req, prepared, { principal, headers: { 'Cache-Control': MAP_CACHE_CONTROL } });
+});
+
 /** The listings the home page's search finds, for the map to light up. Public: a browser may keep it a minute. */
 export const getMapSearch = route(async (req) => {
   const principal = await authenticate(req);
@@ -396,6 +408,16 @@ export const getListingMinimap = route(async (req, params) => {
     return minimap && prepare(S.Minimap, minimap);
   });
   if (!prepared) throw new ApiError(404, 'not_found', `listing ${listing.id} is not on the map`);
+  return preparedResponse(req, prepared, { principal, headers: { 'Cache-Control': MAP_CACHE_CONTROL } });
+});
+
+/** A listing's scores among its nearest and related papers, asked for when the reader switches to them. Public, cached like the map. */
+export const getListingReviewCohorts = route(async (req, params) => {
+  const principal = await authenticate(req);
+  const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
+  const prepared = await mapCached(`review-cohorts/${listing.id}`, MAP_TTL_MS, async () =>
+    prepare(S.ReviewCohorts, { cohorts: await reviewCohorts(listing) }),
+  );
   return preparedResponse(req, prepared, { principal, headers: { 'Cache-Control': MAP_CACHE_CONTROL } });
 });
 

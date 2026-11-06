@@ -13,10 +13,17 @@ import { pct } from '@/lib/format';
 import { likelihood, likelihoodClass } from '@/lib/likelihood';
 import { MAX_RELAYOUT } from '@/lib/map-layout';
 import type { LayoutFrame, LayoutRequest } from '@/lib/map-layout.worker';
+import type { ReviewFactor } from '@/lib/reviews';
 import { SEARCH_MAX_LENGTH } from '@/lib/search';
 import {
   categoryRgb,
   headlineRgb,
+  scoreRgb,
+  scoreStops,
+  SCORE_HIGH,
+  SCORE_LOW,
+  SCORE_MID,
+  type ScoreStops,
   labelTerms,
   LIKELIHOOD_RGB,
   MAP_NONE,
@@ -45,7 +52,9 @@ interface Point {
   headline: number | null;
 }
 type Related = z.output<typeof S.ListingRelated>;
-type ColourBy = 'region' | 'cluster' | 'area' | 'odds';
+type ScoreBy = 'rating' | ReviewFactor;
+type ColourBy = 'region' | 'cluster' | 'area' | 'odds' | ScoreBy;
+type MapScores = z.output<typeof S.MapScores>;
 type MapSearch = z.output<typeof S.MapSearch>;
 type MapRelated = z.output<typeof S.MapRelated>;
 type FollowList = z.output<typeof S.FollowList>;
@@ -65,6 +74,14 @@ const COLOURS: [ColourBy, string][] = [
   ['cluster', 'cluster'],
   ['area', 'primary area'],
 ];
+const SCORES: [ScoreBy, string][] = [
+  ['rating', 'overall'],
+  ['soundness', 'soundness'],
+  ['informativeness', 'informativeness'],
+  ['presentation', 'presentation'],
+  ['confidence', 'confidence'],
+];
+const scoreName = (by: ColourBy) => SCORES.find(([s]) => s === by)?.[1] ?? null;
 const LABELS: [LabelMode, string][] = [
   ['auto', 'by zoom'],
   ['region', 'regions'],
@@ -83,7 +100,17 @@ const subscribeToBrowser = () => () => {};
 const browserSnapshot = () => true;
 const serverSnapshot = () => false;
 const MapFilters = z.object({
-  colourBy: z.enum(['region', 'cluster', 'area', 'odds']),
+  colourBy: z.enum([
+    'region',
+    'cluster',
+    'area',
+    'odds',
+    'rating',
+    'soundness',
+    'informativeness',
+    'presentation',
+    'confidence',
+  ]),
   labelMode: z.enum(['auto', 'region', 'cluster', 'off']),
   query: z.string().max(SEARCH_MAX_LENGTH),
   open: z.boolean(),
@@ -96,8 +123,8 @@ const MapFilters = z.object({
  * `/map`, full screen: every listed paper on the layout a separate similarity service
  * supplied for the venue `kind` (`GET /api/v1/map?kind=`; each venue has its own), fetched once, anonymously, and drawn as soon
  * as it arrives; the titles, most of the bytes, follow (`/map/titles`). Colour by its
- * groupings, the primary area or the main market's headline (a price, never
- * a value). Selecting a paper draws lines to the papers the same service
+ * groupings, the primary area, the main market's headline (a price, never
+ * a value), or a paper's mean on a review score, fetched only then (`/map/scores`). Selecting a paper draws lines to the papers the same service
  * named as related (`GET /listings/{id}/related`), so the map and the paper
  * page never disagree about what is related. The search is the home page's
  * (`GET /map/search`): what it finds stays lit, the rest fades.
@@ -171,10 +198,32 @@ export function PaperMapView({
     revalidateOnFocus: false,
   });
   const titleOf = (i: number): ReactNode => titles?.titles[points![i].slug] ?? <span className="italic">…</span>;
-  const colours = useMemo(
-    () => (points && derived ? paint(points, colourBy, derived.areaIndex) : null),
-    [points, colourBy, derived],
+  const scoreBy = scoreName(colourBy) === null ? null : (colourBy as ScoreBy);
+  const { data: scoreData, isLoading: scoresLoading } = useSWR<MapScores>(
+    data && scoreBy ? `/api/v1/map/scores?${venue}` : null,
+    publicJson,
+    { revalidateOnFocus: false },
   );
+  // The chosen score of each point on the map, in its order; `null` when it has none.
+  const scoreValues = useMemo(() => {
+    if (!scoreBy || !scoreData || !derived) return null;
+    const out = new Array<number | null>(derived.points.length).fill(null);
+    scoreData.slugs.forEach((slug, k) => {
+      const i = derived.bySlug.get(slug);
+      if (i !== undefined) out[i] = scoreData.scores[scoreBy][k];
+    });
+    return out;
+  }, [scoreBy, scoreData, derived]);
+  const stops = useMemo(() => scoreValues && scoreStops(scoreValues), [scoreValues]);
+  const colours = useMemo(
+    () => (points && derived ? paint(points, colourBy, derived.areaIndex, scoreValues, stops) : null),
+    [points, colourBy, derived, scoreValues, stops],
+  );
+  const scoreText = (i: number) => {
+    if (!scoreBy || !scoreValues) return null;
+    const v = scoreValues[i];
+    return `${scoreName(scoreBy)} ${v === null ? 'not reviewed' : v.toFixed(2)}`;
+  };
 
   // The viewer's own papers, drawn apart: a star for starred, a ring for held.
   const { data: follows } = useSWR<FollowList>(signedIn ? '/api/v1/me/follows' : null, viewerJson, {
@@ -398,7 +447,9 @@ export function PaperMapView({
         >
           {titleOf(hover.index)}
           <span className="block opacity-70">
-            {[clusterName(points[hover.index]), headlineText(points[hover.index].headline)].filter(Boolean).join(' · ')}
+            {[clusterName(points[hover.index]), headlineText(points[hover.index].headline), scoreText(hover.index)]
+              .filter(Boolean)
+              .join(' · ')}
           </span>
           {/* Only ever rendered in the browser (a hover), so `navigator` is there. */}
           <span className="mt-0.5 block opacity-50">
@@ -422,8 +473,12 @@ export function PaperMapView({
           <div className="space-y-3 overflow-y-auto px-3 py-2.5">
             <div className="space-y-1 text-subtle">
               <Toggle label="Colour" options={COLOURS} value={colourBy} onChange={setColourBy} />
+              <Toggle label="Or by score" options={SCORES} value={colourBy} onChange={setColourBy} />
               <Toggle label="Labels" options={LABELS} value={labelMode} onChange={setLabelMode} />
               <Legend colourBy={colourBy} areas={derived?.areas ?? []} />
+              {scoreBy && (
+                <ScoreLegend name={scoreName(scoreBy)!} stops={stops ?? null} loading={!scoreData && scoresLoading} />
+              )}
               {signedIn && (mine.starred.length > 0 || mine.held.length > 0) && (
                 <div className="flex items-center gap-1.5">
                   <label className="flex cursor-pointer items-center gap-1.5">
@@ -498,7 +553,11 @@ export function PaperMapView({
                 </div>
                 <p className="mt-1 text-xs text-subtle">
                   <Odds headline={selectedPoint.headline} />
-                  {[selectedPoint.primaryArea, clusterName(selectedPoint) ?? regionName(selectedPoint)]
+                  {[
+                    selectedPoint.primaryArea,
+                    clusterName(selectedPoint) ?? regionName(selectedPoint),
+                    scoreText(selected!),
+                  ]
                     .filter(Boolean)
                     .map((t) => ` · ${t}`)}
                 </p>
@@ -647,6 +706,33 @@ function Legend({ colourBy, areas }: { colourBy: ColourBy; areas: string[] }) {
   );
 }
 
+const rgb = (c: Rgb) => `rgb(${c.join(',')})`;
+
+/** A score's scale: the two ends are clamped, so they read as "or lower" and "or higher". */
+function ScoreLegend({ name, stops, loading }: { name: string; stops: ScoreStops | null; loading: boolean }) {
+  if (!stops) {
+    return (
+      <p className="pt-0.5 text-xs text-muted">{loading ? 'Loading the scores…' : 'No reviews on this map yet.'}</p>
+    );
+  }
+  return (
+    <div className="pt-0.5 text-xs text-subtle">
+      <div className="flex items-center gap-1.5 font-mono">
+        <span>≤{stops.lo.toFixed(2)}</span>
+        <span
+          className="h-2 flex-1"
+          style={{ background: `linear-gradient(to right, ${rgb(SCORE_LOW)}, ${rgb(SCORE_MID)}, ${rgb(SCORE_HIGH)})` }}
+        />
+        <span>≥{stops.hi.toFixed(2)}</span>
+      </div>
+      <p className="mt-0.5 text-muted">
+        Mean {name === 'overall' ? 'rating' : name} of each paper’s reviews; grey is the median,{' '}
+        <span className="font-mono">{stops.mid.toFixed(2)}</span>. Faint: not reviewed.
+      </p>
+    </div>
+  );
+}
+
 /** Everything that depends only on the map, computed once per fetch. */
 function derive(data: PaperMap) {
   const points: Point[] = data.slugs.map((slug, i) => ({
@@ -684,18 +770,33 @@ function spotlight(colours: Uint8Array, matches: number[]): Uint8Array {
   return out;
 }
 
-/** RGBA per point for a colouring. */
-function paint(points: Point[], by: ColourBy, areaIndex: Map<string, number>): Uint8Array {
+/** A paper with no score to colour it by: there, but well behind the median's grey. */
+const UNSCORED_ALPHA = 70;
+
+/** RGBA per point for a colouring. `scores` and `stops` are the chosen score's, once fetched. */
+function paint(
+  points: Point[],
+  by: ColourBy,
+  areaIndex: Map<string, number>,
+  scores: readonly (number | null)[] | null,
+  stops: ScoreStops | null,
+): Uint8Array {
   const out = new Uint8Array(points.length * 4);
+  const scored = scoreName(by) !== null;
   points.forEach((p, i) => {
+    const score = scored && scores && stops ? scores[i] : null;
     const rgb =
-      by === 'odds'
-        ? headlineRgb(p.headline)
-        : by === 'area'
-          ? categoryRgb(p.primaryArea ? areaIndex.get(p.primaryArea)! : null)
-          : categoryRgb(by === 'region' ? p.region : p.cluster);
+      score !== null
+        ? scoreRgb(score, stops!)
+        : scored
+          ? MAP_NONE
+          : by === 'odds'
+            ? headlineRgb(p.headline)
+            : by === 'area'
+              ? categoryRgb(p.primaryArea ? areaIndex.get(p.primaryArea)! : null)
+              : categoryRgb(by === 'region' ? p.region : p.cluster);
     out.set(rgb, 4 * i);
-    out[4 * i + 3] = 200;
+    out[4 * i + 3] = scored && score === null ? UNSCORED_ALPHA : 200;
   });
   return out;
 }
