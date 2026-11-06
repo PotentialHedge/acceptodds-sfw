@@ -1050,10 +1050,10 @@ value`, the exit quote against the basis as % or `REP` (toggled in the
   ETag (`304` on `If-None-Match`).
 - **The map's public reads are cached in process** (`server/map-cache.ts`),
   since Cloudflare bypasses `/api/*` (§11): `GET /map`, `/map/titles`,
-  `/map/related` and `/listings/{id}/minimap` are validated, serialised and
-  compressed once (`http.prepare`: brotli and gzip, picked by
-  `Accept-Encoding` in `preparedResponse`; nothing downstream compresses a
-  route handler's body) and served from memory. `setMap`, `setRelated` and
+  `/map/related` and `/listings/{id}/minimap` are validated and serialised
+  once (`http.prepare`) and served from memory. They go out uncompressed: since
+  16.4 Next drops a route handler's `Content-Encoding`, so a body encoded in
+  the handler is unreadable, and Next's `compress` does not touch these. `setMap`, `setRelated` and
   `upsertListing` bump its generation **after their commit**; headlines
   bump nothing and are covered by an hour's TTL, on the owner's call (the
   map changes rarely). Like the standings cache, correct for one app
