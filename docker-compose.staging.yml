@@ -94,7 +94,7 @@ services:
       - traefik.http.routers.acceptodds-staging.rule=Host(`staging.acceptodds.com`)
       - traefik.http.routers.acceptodds-staging.entrypoints=websecure
       - traefik.http.routers.acceptodds-staging.tls=true
-      - traefik.http.routers.acceptodds-staging.middlewares=acceptodds-staging-auth,acceptodds-staging-headers
+      - traefik.http.routers.acceptodds-staging.middlewares=acceptodds-staging-auth,acceptodds-staging-headers,acceptodds-staging-compress
       - traefik.http.services.acceptodds-staging.loadbalancer.server.port=3000
       # Staging holds a copy of production's data, so it is not public: HTTP
       # basic auth, `user:bcrypt-hash` from .env.staging (gitignored). The
@@ -104,6 +104,8 @@ services:
       - traefik.http.middlewares.acceptodds-staging-auth.basicauth.users=${STAGING_BASIC_AUTH:?set STAGING_BASIC_AUTH in .env.staging}
       - traefik.http.middlewares.acceptodds-staging-auth.basicauth.removeheader=true
       - traefik.http.middlewares.acceptodds-staging-auth.basicauth.realm=acceptodds staging
+      # The app sends the map uncompressed (src/server/api/http.ts), and it is megabytes.
+      - traefik.http.middlewares.acceptodds-staging-compress.compress=true
       - traefik.http.middlewares.acceptodds-staging-headers.headers.contenttypenosniff=true
       - traefik.http.middlewares.acceptodds-staging-headers.headers.framedeny=true
       - traefik.http.middlewares.acceptodds-staging-headers.headers.referrerpolicy=strict-origin-when-cross-origin
