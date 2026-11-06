@@ -96,6 +96,14 @@ services:
       - traefik.http.routers.acceptodds-staging.tls=true
       - traefik.http.routers.acceptodds-staging.middlewares=acceptodds-staging-auth,acceptodds-staging-headers,acceptodds-staging-compress
       - traefik.http.services.acceptodds-staging.loadbalancer.server.port=3000
+      # The browser fetches the map with `credentials: 'omit'` (PaperMapView.tsx), so it never sends
+      # basic auth and would get a 401. Only these paths skip it; production has no basic auth.
+      - traefik.http.routers.acceptodds-staging-map.rule=Host(`staging.acceptodds.com`) && (Path(`/api/v1/map`) || PathPrefix(`/api/v1/map/`))
+      - traefik.http.routers.acceptodds-staging-map.priority=1000
+      - traefik.http.routers.acceptodds-staging-map.entrypoints=websecure
+      - traefik.http.routers.acceptodds-staging-map.tls=true
+      - traefik.http.routers.acceptodds-staging-map.service=acceptodds-staging
+      - traefik.http.routers.acceptodds-staging-map.middlewares=acceptodds-staging-headers,acceptodds-staging-compress
       # Staging holds a copy of production's data, so it is not public: HTTP
       # basic auth, `user:bcrypt-hash` from .env.staging (gitignored). The
       # header is stripped before the app sees it, or the app would read
