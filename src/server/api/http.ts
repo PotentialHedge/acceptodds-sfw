@@ -92,9 +92,9 @@ export interface Prepared {
 
 /**
  * `respond`'s validation and serialisation, done once for a cached body
- * (`map-cache.ts`). Not its compression: Next's own `compress` does that, and
- * since 16.4 Next drops a route handler's `Content-Encoding`, so a body encoded
- * here reaches the browser as bytes it cannot read.
+ * (`map-cache.ts`). Never compressed here: since 16.4 Next drops a route
+ * handler's `Content-Encoding`, so a body encoded here reaches the browser as
+ * bytes it cannot read. Nothing in the app compresses these; that is for the proxy.
  */
 export async function prepare<S extends z.ZodType>(schema: S, body: z.input<S>): Promise<Prepared> {
   const parsed = schema.safeParse(body);
