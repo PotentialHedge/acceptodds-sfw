@@ -106,12 +106,14 @@ services:
       - traefik.http.routers.acceptodds-sfw.rule=Host(`acceptodds.com`) || Host(`www.acceptodds.com`)
       - traefik.http.routers.acceptodds-sfw.entrypoints=websecure
       - traefik.http.routers.acceptodds-sfw.tls=true
-      - traefik.http.routers.acceptodds-sfw.middlewares=acceptodds-sfw-www,acceptodds-sfw-headers,acceptodds-sfw-ratelimit
+      - traefik.http.routers.acceptodds-sfw.middlewares=acceptodds-sfw-www,acceptodds-sfw-headers,acceptodds-sfw-ratelimit,acceptodds-sfw-compress
       - traefik.http.services.acceptodds-sfw.loadbalancer.server.port=3000
       # www -> apex, so Better Auth's single origin is the only one in use.
       - traefik.http.middlewares.acceptodds-sfw-www.redirectregex.regex=^https://www\.acceptodds\.com/(.*)
       - traefik.http.middlewares.acceptodds-sfw-www.redirectregex.replacement=https://acceptodds.com/$${1}
       - traefik.http.middlewares.acceptodds-sfw-www.redirectregex.permanent=true
+      # The app sends the map uncompressed (src/server/api/http.ts), and it is megabytes.
+      - traefik.http.middlewares.acceptodds-sfw-compress.compress=true
       - traefik.http.middlewares.acceptodds-sfw-headers.headers.contenttypenosniff=true
       - traefik.http.middlewares.acceptodds-sfw-headers.headers.framedeny=true
       - traefik.http.middlewares.acceptodds-sfw-headers.headers.referrerpolicy=strict-origin-when-cross-origin
