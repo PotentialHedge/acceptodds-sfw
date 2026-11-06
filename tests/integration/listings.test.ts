@@ -7,11 +7,11 @@ import { markets } from '@/db/schema';
 import * as mapTitlesRoute from '@/app/api/v1/map/titles/route';
 import { MINIMAP_NEAREST } from '@/lib/map';
 import { defaultMarketKind } from '@/lib/venue';
+import * as S from '@/server/api/schemas';
 import { upsertListing } from '@/server/listings';
 import { listingMinimap, listingRelatedTo, mapKinds, onMap, resolveListing } from '@/server/views';
 import { api, ORIGIN, trader } from './api-client';
 import { closePool, resetDatabase, seedMarket, STARTING_MICRO } from './helpers';
-import * as S from '@/server/api/schemas';
 
 const db = getDb();
 let admin: { token: string };
