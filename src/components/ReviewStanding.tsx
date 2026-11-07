@@ -143,7 +143,7 @@ export function ReviewFigure({
       {among === 'search' && (
         <SearchCohort query={query} onSubmit={search} errors={found.data?.errors ?? []} kind={series[0].field.kind} />
       )}
-      {cohort && <CohortKey cohort={cohort.cohort} field={at.field} />}
+      {cohort && <CohortKey cohort={cohort.cohort} field={at.field} query={query} />}
       <ReviewStanding
         key={`${among}:${among === 'search' ? query : ''}:${at.label}`}
         field={at.field}
@@ -218,8 +218,11 @@ function SearchCohort({
   );
 }
 
-/** What each mark on a cohort's chart is. Its swatches are drawn as the chart draws them. */
-function CohortKey({ cohort, field }: { cohort: Shown['cohort']; field: ReviewField }) {
+/**
+ * What each mark on a cohort's chart is. Its swatches are drawn as the chart draws them. A search's
+ * key ends with the same search on the home page, in a new tab, to see the papers themselves.
+ */
+function CohortKey({ cohort, field, query }: { cohort: Shown['cohort']; field: ReviewField; query: string }) {
   const line = (dashed: boolean, className: string) => (
     <svg width="22" height="8" aria-hidden className="mr-1.5 inline-block">
       <line
@@ -234,7 +237,7 @@ function CohortKey({ cohort, field }: { cohort: Shown['cohort']; field: ReviewFi
     </svg>
   );
   return (
-    <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 font-sans text-xs text-subtle">
+    <ul className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-0.5 font-sans text-xs text-subtle">
       <li>
         {line(false, 'stroke-subtle')}
         {field.papers} {{ nearest: 'nearest', related: 'related', search: 'matching' }[cohort]} papers
@@ -243,6 +246,19 @@ function CohortKey({ cohort, field }: { cohort: Shown['cohort']; field: ReviewFi
         {line(true, 'stroke-muted')}
         all reviewed papers at {field.kind}
       </li>
+      {cohort === 'search' && (
+        <li className="ml-auto">
+          <a
+            href={`/?${new URLSearchParams({ kind: field.kind, q: query })}`}
+            target="_blank"
+            rel="noopener"
+            className="border border-rule bg-rule-soft px-2 py-0.5 font-semibold text-ink hover:no-underline"
+          >
+            Open search <span aria-hidden>↗</span>
+            <span className="sr-only"> (opens in a new tab)</span>
+          </a>
+        </li>
+      )}
     </ul>
   );
 }
