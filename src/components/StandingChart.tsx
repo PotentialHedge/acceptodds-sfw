@@ -28,7 +28,8 @@ function units(x: number): string {
  * (the bots, on the global board) are open circles on the curve, unlabelled
  * so they never collide; hovering one names it. One series, so no legend.
  * `format` lets another field of numbers use the same drawing (a paper's mean
- * review rating); left out, it reads as traders' net worth.
+ * review rating); left out, it reads as traders' net worth. `bars` draws a
+ * histogram in place of the curve, and its `reference` as a dashed outline.
  */
 export function StandingChart({
   curve,
@@ -39,6 +40,7 @@ export function StandingChart({
   other = null,
   marks = [],
   reference,
+  bars,
   format,
 }: {
   /** The density at evenly spaced points across `domain`, root-scaled to peak at 1. */
@@ -57,6 +59,12 @@ export function StandingChart({
   marks?: readonly { value: number; label: string }[];
   /** Another density at the same points, drawn dashed behind for comparison. */
   reference?: readonly number[];
+  /**
+   * Bins of `width` from `domain[0]` in place of the curve (the last cut short at `domain[1]`): each one's
+   * height, scaled to peak at 1 or less, and the same for a field to compare with, drawn as a dashed
+   * outline. `curve` is then not drawn.
+   */
+  bars?: { width: number; heights: readonly number[]; reference?: readonly number[] };
   /** What the chart is of: its axis, its hover readout and its name to a screen reader. */
   format?: { tick: (x: number) => string; ticks?: number[]; readout: (x: number) => ReactNode; ariaLabel: string };
 }) {
@@ -91,11 +99,28 @@ export function StandingChart({
 
   const line = d.xs.map((x, i) => `${i ? 'L' : 'M'}${sx(x).toFixed(1)},${sy(d.ys[i]).toFixed(1)}`).join('');
   const area = `${line}L${sx(d.domain[1]).toFixed(1)},${base}L${sx(d.domain[0]).toFixed(1)},${base}Z`;
+  const binW = bars?.width ?? 1;
+  /** Where bin `i` starts and ends, in pixels. */
+  const edge = (i: number) => sx(Math.min(d.domain[1], d.domain[0] + i * binW));
+  /** The bin `x` falls in, the last closed at the top of the scale. */
+  const binOf = (x: number) =>
+    Math.min(bars!.heights.length - 1, Math.max(0, Math.floor((x - d.domain[0]) / binW + 1e-9)));
+  const heightAt = (x: number) => (bars ? bars.heights[binOf(x)] : yAt(d, x));
+  /** An outline over `heights`, a step per bin. */
+  const steps = (heights: readonly number[]) =>
+    heights
+      .map((h, i) => {
+        const x0 = edge(i).toFixed(1);
+        const x1 = edge(i + 1).toFixed(1);
+        const y = sy(h).toFixed(1);
+        return `${i ? 'L' : `M${x0},${base}L`}${x0},${y}L${x1},${y}`;
+      })
+      .join('') + `L${sx(d.domain[1]).toFixed(1)},${base}`;
   const youX = at === null ? null : sx(at);
-  const youY = at === null ? null : sy(yAt(d, at));
+  const youY = at === null ? null : sy(heightAt(at));
   const ticks = format?.ticks ?? niceTicks(d.domain[0], d.domain[1], Math.max(2, Math.floor(plotW / 140)));
   const otherX = otherAt === null ? null : sx(otherAt);
-  const otherY = otherAt === null ? null : sy(yAt(d, otherAt));
+  const otherY = otherAt === null ? null : sy(heightAt(otherAt));
   // Keep a label inside the chart when its line is near an edge.
   const anchorAt = (x: number) => (x < width * 0.2 ? 'start' : x > width * 0.8 ? 'end' : 'middle');
 
@@ -131,16 +156,48 @@ export function StandingChart({
           setHover(Math.min(d.domain[1], Math.max(d.domain[0], from + (e.key === 'ArrowLeft' ? -step : step))));
         }}
       >
-        <path d={area} className="fill-rule-soft" />
-        {youX !== null && (
+        {bars ? (
+          bars.heights.map((h, i) => {
+            const x0 = edge(i);
+            const w = Math.max(1, edge(i + 1) - x0 - 2);
+            // A bin with any papers always shows, however small beside the tallest.
+            const y = h > 0 ? Math.min(sy(h), base - 2) : base;
+            const below = youX !== null && x0 + w <= youX;
+            const mine = at !== null && binOf(at) === i;
+            return (
+              <rect
+                key={i}
+                x={x0 + 1}
+                y={y}
+                width={w}
+                height={base - y}
+                className={mine ? 'fill-accent opacity-40' : below ? 'fill-accent opacity-15' : 'fill-rule-strong'}
+              />
+            );
+          })
+        ) : (
           <>
-            <clipPath id="standing-below">
-              <rect x={0} y={0} width={Math.max(0, youX)} height={height} />
-            </clipPath>
-            <path d={area} clipPath="url(#standing-below)" className="fill-accent opacity-15" />
+            <path d={area} className="fill-rule-soft" />
+            {youX !== null && (
+              <>
+                <clipPath id="standing-below">
+                  <rect x={0} y={0} width={Math.max(0, youX)} height={height} />
+                </clipPath>
+                <path d={area} clipPath="url(#standing-below)" className="fill-accent opacity-15" />
+              </>
+            )}
           </>
         )}
-        {reference && (
+        {bars?.reference && (
+          <path
+            d={steps(bars.reference)}
+            fill="none"
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+            className="stroke-muted"
+          />
+        )}
+        {!bars && reference && (
           <path
             d={reference.map((y, i) => `${i ? 'L' : 'M'}${sx(d.xs[i]).toFixed(1)},${sy(y).toFixed(1)}`).join('')}
             fill="none"
@@ -149,7 +206,7 @@ export function StandingChart({
             className="stroke-muted"
           />
         )}
-        <path d={line} fill="none" strokeWidth={2} strokeLinejoin="round" className="stroke-subtle" />
+        {!bars && <path d={line} fill="none" strokeWidth={2} strokeLinejoin="round" className="stroke-subtle" />}
         <line x1={PAD.left} x2={width - PAD.right} y1={base} y2={base} strokeWidth={1} className="stroke-rule-strong" />
         {ticks.map((t) => (
           <text key={t} x={sx(t)} y={base + 17} textAnchor="middle" className="fill-muted font-mono text-[11px]">
@@ -162,7 +219,7 @@ export function StandingChart({
             <circle
               key={m.label}
               cx={sx(x)}
-              cy={sy(yAt(d, x))}
+              cy={sy(heightAt(x))}
               r={3.5}
               strokeWidth={1.5}
               className="fill-card stroke-ink"

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { atomsOf, CURVE_POINTS, densityCurve, factorMeans, meanRating, shareBelow, threadReviews } from '@/lib/reviews';
+import {
+  atomsOf,
+  binShares,
+  CURVE_POINTS,
+  densityCurve,
+  factorMeans,
+  meanRating,
+  shareBelow,
+  threadReviews,
+} from '@/lib/reviews';
 
 const comment = (externalId: string, replyTo: string | null) => ({ externalId, kind: 'comment' as const, replyTo });
 const review = (externalId: string) => ({ externalId, kind: 'review' as const, replyTo: null });
@@ -48,6 +57,27 @@ describe('densityCurve', () => {
   });
   it('survives an empty field', () => {
     expect(densityCurve([], [1, 4]).every((y) => y === 0)).toBe(true);
+  });
+});
+
+describe('binShares', () => {
+  it('bins a short scale in eighths, the top of the scale in the last bin, shares summing to 1', () => {
+    const { width, shares } = binShares(atomsOf([1, 1.33, 2.25, 2.5, 4]), [1, 4]);
+    expect(width).toBe(0.125);
+    expect(shares).toHaveLength(24);
+    expect(shares[0]).toBeCloseTo(0.2); // 1
+    expect(shares[2]).toBeCloseTo(0.2); // 1.33, in 1.25–1.375
+    expect(shares[10]).toBeCloseTo(0.2); // 2.25, on an edge: the bin above it
+    expect(shares[12]).toBeCloseTo(0.2); // 2.5
+    expect(shares[23]).toBeCloseTo(0.2); // 4, closed above
+    expect(shares.reduce((a, b) => a + b, 0)).toBeCloseTo(1);
+  });
+
+  it('bins a long scale in halves', () => {
+    const { width, shares } = binShares(atomsOf([1, 5.5, 10]), [1, 10]);
+    expect(width).toBe(0.5);
+    expect(shares).toHaveLength(18);
+    expect(shares[9]).toBeCloseTo(1 / 3);
   });
 });
 

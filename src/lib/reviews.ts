@@ -97,6 +97,30 @@ export function shareBelow(atoms: readonly Atom[], x: number): number {
   return sum;
 }
 
+/** About this many bins across a scale, at a round width: a 1–4 scale in eighths, a 1–10 one in halves. */
+const BINS_PER_SCALE = 24;
+const BIN_WIDTHS = [0.1, 0.125, 0.2, 0.25, 0.5, 1, 2, 5, 10];
+
+/**
+ * The share of `atoms` in each of equal-width bins across `domain`, each bin
+ * closed below and the last also above, so a mean at the top of the scale
+ * counts. The width is round (`BIN_WIDTHS`), so a bin's range reads plainly;
+ * a domain it does not divide gets a last bin cut short, never a wider one.
+ */
+export function binShares(
+  atoms: readonly Atom[],
+  domain: readonly [number, number],
+): { width: number; shares: number[] } {
+  const [lo, hi] = domain;
+  const width = BIN_WIDTHS.find((w) => w >= (hi - lo) / BINS_PER_SCALE) ?? BIN_WIDTHS[BIN_WIDTHS.length - 1];
+  const n = Math.max(1, Math.ceil((hi - lo) / width - 1e-9));
+  const shares = Array.from({ length: n }, () => 0);
+  // A small slack, so a mean of 2.25 stored as 2.2499… lands in the bin it reads as.
+  for (const [mean, share] of atoms)
+    shares[Math.min(n - 1, Math.max(0, Math.floor((mean - lo) / width + 1e-9)))] += share;
+  return { width, shares };
+}
+
 /**
  * The Gaussian kernel density of `atoms` at `CURVE_POINTS` even points across `domain`, scaled to peak at 1.
  * `bandwidth`, as a share of the scale: a handful of papers needs a wider kernel than a venue's thousands.

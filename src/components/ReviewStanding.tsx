@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react';
 import useSWR from 'swr';
 import type { z } from 'zod';
 import { standingBand } from '@/lib/leaderboard';
-import { NEAREST_COHORT, OVERALL, shareBelow, type ReviewCohort } from '@/lib/reviews';
+import { binShares, NEAREST_COHORT, OVERALL, shareBelow, type Atom, type ReviewCohort } from '@/lib/reviews';
 import type * as S from '@/server/api/schemas';
 import { SEARCH_MAX_LENGTH } from '@/lib/search';
 import type { ReviewField, ReviewSeries } from '@/server/review-field';
@@ -60,6 +60,8 @@ export function ReviewFigure({
 }) {
   const [selected, setSelected] = useState(series[0].label);
   const [among, setAmong] = useState<Among>('venue');
+  /** Drawn as a smoothed curve, or as bins of the exact means. */
+  const [binned, setBinned] = useState(false);
   /** The query submitted, trimmed; empty before one is. */
   const [query, setQuery] = useState('');
   const base = `/api/v1/listings/${encodeURIComponent(slug)}`;
@@ -107,7 +109,7 @@ export function ReviewFigure({
     setQuery(q);
   }
   return (
-    <figure className="my-3">
+    <figure className="my-5">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 font-sans text-xs text-muted">
         <div className="flex flex-wrap gap-x-3">
           <span>Among:</span>
@@ -125,33 +127,45 @@ export function ReviewFigure({
           </Pick>
           {note && <span className="italic">{note}</span>}
         </div>
-        {shown.length > 1 && (
-          <select
-            aria-label="Score"
-            value={at.label}
-            onChange={(e) => setSelected(e.target.value)}
-            className="cursor-pointer border border-rule bg-card px-1.5 py-0.5 text-ink"
-          >
-            {shown.map((s) => (
-              <option key={s.label} value={s.label}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        )}
+        <div className="flex flex-wrap items-center gap-x-3">
+          <span>Shape:</span>
+          <Pick on={!binned} onClick={() => setBinned(false)}>
+            smooth
+          </Pick>
+          <Pick on={binned} onClick={() => setBinned(true)}>
+            bins
+          </Pick>
+          {shown.length > 1 && (
+            <select
+              aria-label="Score"
+              value={at.label}
+              onChange={(e) => setSelected(e.target.value)}
+              className="cursor-pointer border border-rule bg-card px-1.5 py-0.5 text-ink"
+            >
+              {shown.map((s) => (
+                <option key={s.label} value={s.label}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
       {among === 'search' && (
         <SearchCohort query={query} onSubmit={search} errors={found.data?.errors ?? []} kind={series[0].field.kind} />
       )}
-      {cohort && <CohortKey cohort={cohort.cohort} field={at.field} query={query} />}
+      {cohort && <CohortKey cohort={cohort.cohort} field={at.field} query={query} binned={binned} />}
       <ReviewStanding
         key={`${among}:${among === 'search' ? query : ''}:${at.label}`}
         field={at.field}
         mean={at.mean}
         name={name}
         within={!!cohort}
+        // On a cohort, the venue's own means on the same score, for its outline.
+        venueAtoms={cohort ? series.find((s) => s.label === at.label)?.field.atoms : undefined}
+        binned={binned}
       />
-      <figcaption className={ui.caption}>
+      <figcaption className={`${ui.caption} mt-3`}>
         <b>Figure {figure}.</b> Mean {name} of {cohortPhrase(cohort?.cohort, at.field, query)}. This paper averages{' '}
         <span className="font-mono">{at.mean.toFixed(2)}</span> over{' '}
         {at.count === 1 ? 'one review' : `${at.count} reviews`}
@@ -160,7 +174,11 @@ export function ReviewFigure({
             , above {at.field.ahead}% of {others}
           </>
         )}
-        .{cohort && ' The two curves show shapes, each scaled to the same height, not numbers of papers.'}
+        .
+        {cohort &&
+          (binned
+            ? ' Bars and outline are each group\u2019s share of its papers, on one scale.'
+            : ' The two curves show shapes, each scaled to the same height, not numbers of papers.')}
       </figcaption>
     </figure>
   );
@@ -184,7 +202,7 @@ function SearchCohort({
 }) {
   return (
     <>
-      <form role="search" onSubmit={onSubmit} className="mt-2 flex gap-2">
+      <form role="search" onSubmit={onSubmit} className="mt-4 flex gap-2">
         <input
           type="search"
           name="q"
@@ -213,7 +231,7 @@ function SearchCohort({
           </PopoverContent>
         </Popover>
       </form>
-      {errors.length > 0 && <div className="mt-1 font-sans text-xs text-down">Ignored: {errors.join('; ')}</div>}
+      {errors.length > 0 && <div className="mt-1.5 font-sans text-xs text-down">Ignored: {errors.join('; ')}</div>}
     </>
   );
 }
@@ -222,7 +240,17 @@ function SearchCohort({
  * What each mark on a cohort's chart is. Its swatches are drawn as the chart draws them. A search's
  * key ends with the same search on the home page, in a new tab, to see the papers themselves.
  */
-function CohortKey({ cohort, field, query }: { cohort: Shown['cohort']; field: ReviewField; query: string }) {
+function CohortKey({
+  cohort,
+  field,
+  query,
+  binned,
+}: {
+  cohort: Shown['cohort'];
+  field: ReviewField;
+  query: string;
+  binned: boolean;
+}) {
   const line = (dashed: boolean, className: string) => (
     <svg width="22" height="8" aria-hidden className="mr-1.5 inline-block">
       <line
@@ -237,9 +265,15 @@ function CohortKey({ cohort, field, query }: { cohort: Shown['cohort']; field: R
     </svg>
   );
   return (
-    <ul className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-0.5 font-sans text-xs text-subtle">
+    <ul className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 font-sans text-xs text-subtle">
       <li>
-        {line(false, 'stroke-subtle')}
+        {binned ? (
+          <svg width="10" height="10" aria-hidden className="mr-1.5 inline-block align-[-1px]">
+            <rect width="10" height="10" className="fill-rule-strong" />
+          </svg>
+        ) : (
+          line(false, 'stroke-subtle')
+        )}
         {field.papers} {{ nearest: 'nearest', related: 'related', search: 'matching' }[cohort]} papers
       </li>
       <li>
@@ -284,39 +318,77 @@ function ReviewStanding({
   mean,
   name,
   within,
+  venueAtoms,
+  binned,
 }: {
   field: ReviewField;
   mean: number;
   name: string;
   /** A cohort rather than the whole venue. */
   within: boolean;
+  /** On a cohort, the venue's atoms on the same score: its dashed outline when binned. */
+  venueAtoms?: readonly Atom[];
+  binned: boolean;
 }) {
   const [lo, hi] = field.domain;
+  const bins = binned ? binShares(field.atoms, field.domain) : null;
+  const venueBins = bins && venueAtoms ? binShares(venueAtoms, field.domain).shares : undefined;
+  // Shares, so the cohort and the venue stand on one scale: the taller of the two peaks at 1.
+  const peak = bins ? Math.max(...bins.shares, ...(venueBins ?? [])) : 1;
+  const scaled = (shares: readonly number[]) => shares.map((x) => (peak > 0 ? x / peak : 0));
+  const percent = (share: number) => (share > 0 && share < 0.01 ? '<1%' : `${Math.round(share * 100)}%`);
+  const papers = within ? 'these papers' : 'papers';
   // Every whole rating on a short scale; a long one is left to the chart, by its width.
   const ticks = hi - lo <= 6 ? Array.from({ length: hi - lo + 1 }, (_, i) => lo + i) : undefined;
   const label = field.ahead === null ? 'this paper' : `this paper, ${standingBand(field.ahead)}`;
   return (
-    <StandingChart
-      curve={field.curve}
-      domain={field.domain}
-      values={[]}
-      you={mean}
-      reference={field.reference}
-      label={label}
-      format={{
-        tick: (x) => String(x),
-        ticks,
-        ariaLabel: `Mean ${name} of ${within ? 'similar reviewed papers' : `the reviewed papers at ${field.kind}`}; ${label}, at ${mean.toFixed(2)}`,
-        readout: (x) => (
-          <>
-            <span className="font-mono">{x.toFixed(2)}</span>
-            <span className="text-muted">
-              {' '}
-              {Math.floor(shareBelow(field.atoms, x) * 100)}% of {within ? 'these papers' : 'papers'} are lower
-            </span>
-          </>
-        ),
-      }}
-    />
+    <div className="mt-5">
+      <StandingChart
+        curve={field.curve}
+        domain={field.domain}
+        values={[]}
+        you={mean}
+        reference={field.reference}
+        bars={
+          bins
+            ? { width: bins.width, heights: scaled(bins.shares), reference: venueBins && scaled(venueBins) }
+            : undefined
+        }
+        label={label}
+        format={{
+          tick: (x) => String(x),
+          ticks,
+          ariaLabel: `Mean ${name} of ${within ? 'similar reviewed papers' : `the reviewed papers at ${field.kind}`}; ${label}, at ${mean.toFixed(2)}`,
+          readout: (x) => {
+            if (!bins) {
+              return (
+                <>
+                  <span className="font-mono">{x.toFixed(2)}</span>
+                  <span className="text-muted">
+                    {' '}
+                    {Math.floor(shareBelow(field.atoms, x) * 100)}% of {papers} are lower
+                  </span>
+                </>
+              );
+            }
+            const i = Math.min(bins.shares.length - 1, Math.max(0, Math.floor((x - lo) / bins.width + 1e-9)));
+            const from = lo + i * bins.width;
+            const to = Math.min(hi, from + bins.width);
+            return (
+              <>
+                <span className="font-mono">
+                  {Number(from.toFixed(3))}–{Number(to.toFixed(3))}
+                </span>
+                <span className="text-muted">
+                  {' '}
+                  {percent(bins.shares[i])} of {papers}
+                  {venueBins && `, ${percent(venueBins[i])} of all at ${field.kind}`}
+                </span>
+              </>
+            );
+          },
+        }}
+      />
+    </div>
   );
 }
