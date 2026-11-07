@@ -236,7 +236,10 @@ export const listings = pgTable(
     // fresh, which view counting dirties, so drizzle/0042 also vacuums the
     // table far more often than autovacuum's default.
     index('listings_kind_id_idx').on(t.kind, t.id),
-    check('listings_venue_status_check', sql`${t.venueStatus} in (${sql.raw(VENUE_STATUSES.map((v) => `'${v}'`).join(', '))})`),
+    check(
+      'listings_venue_status_check',
+      sql`${t.venueStatus} in (${sql.raw(VENUE_STATUSES.map((v) => `'${v}'`).join(', '))})`,
+    ),
     check('listings_venue_status_at_check', sql`(${t.venueStatus} is null) = (${t.venueStatusAt} is null)`),
   ],
 );
