@@ -320,6 +320,25 @@ export function buildRegistry(): OpenAPIRegistry {
     );
   }
 
+  for (const method of ['put', 'delete'] as const) {
+    r.registerPath(
+      op({
+        method,
+        path: '/listings/{id}/withdrawn',
+        tags: ['listings'],
+        summary: method === 'put' ? 'Mark a listing withdrawn' : 'Clear a listing’s withdrawal',
+        description:
+          method === 'put'
+            ? 'Marks the listing withdrawn from its venue (`withdrawnAt`): the home list and the map leave it out unless asked, a search lists it apart, and it is labelled. Idempotent, and keeps the time it was first marked. Its own call, so re-posting the listing keeps it.'
+            : 'Clears `withdrawnAt`, for a withdrawal that was reverted. Idempotent.',
+        scope: 'admin',
+        request: { params: z.object({ id: S.ListingRef }) },
+        ok: { status: 200, schema: S.SetWithdrawnResult, description: 'When it was marked, or null.' },
+        errors: { 404: 'not_found' },
+      }),
+    );
+  }
+
   r.registerPath(
     op({
       method: 'put',

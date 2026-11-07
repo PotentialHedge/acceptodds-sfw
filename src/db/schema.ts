@@ -203,6 +203,15 @@ export const listings = pgTable(
      * paper that was withdrawn.
      */
     closedAt: timestamp('closed_at', { withTimezone: true, mode: 'date' }),
+    /**
+     * When the creating client marked it withdrawn from its venue: the lists
+     * and the map leave it out unless asked (`views.browseListings`), and it
+     * is labelled wherever it is shown. Set only by `listings.setWithdrawn`
+     * (`PUT`/`DELETE /listings/{id}/withdrawn`), never by the upsert, so
+     * re-posting a listing keeps it. Opaque, like `closedAt`, which also covers
+     * desk rejections and says nothing about whether to show a paper.
+     */
+    withdrawnAt: timestamp('withdrawn_at', { withTimezone: true, mode: 'date' }),
     createdAt: createdAt(),
   },
   (t) => [

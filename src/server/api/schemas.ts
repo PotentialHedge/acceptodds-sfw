@@ -187,6 +187,9 @@ const ListingFields = {
   closedAt: Timestamp.nullable().meta({
     description: 'When the creating client closed it (`PUT /listings/{id}/closed`), else `null`.',
   }),
+  withdrawnAt: Timestamp.nullable().meta({
+    description: 'When it was marked withdrawn from its venue (`PUT /listings/{id}/withdrawn`), else `null`.',
+  }),
   createdAt: Timestamp,
 };
 
@@ -1231,6 +1234,15 @@ export const SetClosedResult = z
     closedAt: Timestamp.nullable().meta({ description: 'When it was first closed; `null` once opened again.' }),
   })
   .meta({ id: 'SetClosedResult' });
+
+export const SetWithdrawnResult = z
+  .object({
+    listingId: Id,
+    withdrawnAt: Timestamp.nullable().meta({
+      description: 'When it was first marked; `null` once it is not any more.',
+    }),
+  })
+  .meta({ id: 'SetWithdrawnResult' });
 
 export const SetTextResult = z.object({ listingId: Id, chars: z.number().int().min(0) }).meta({ id: 'SetTextResult' });
 

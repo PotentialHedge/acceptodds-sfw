@@ -136,13 +136,20 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
       />
       {/* The paper's venue becomes the navbar's. */}
       {venueOf && <RememberVenue kind={venueOf} stale={venueOf !== (await currentVenue())} />}
-      {listing.kind && <RunningHead>{runningHead(listing.kind)}</RunningHead>}
+      {listing.kind && (
+        <RunningHead>{listing.withdrawnAt ? `Withdrawn from ${listing.kind}` : runningHead(listing.kind)}</RunningHead>
+      )}
       <TitleBlock
         title={<MathText text={listing.title} />}
         byline={listing.authors.length > 0 ? listing.authors.join(', ') : null}
         abstract={listing.summary}
         abstractMath
       >
+        {listing.withdrawnAt && (
+          <p className="mb-2 font-sans text-[13px] text-down">
+            Withdrawn{listing.kind ? ` from ${listing.kind}` : ''}, so left out of the paper lists and the map.
+          </p>
+        )}
         {listing.links.length > 0 && (
           <div className="mt-1.5 flex flex-wrap justify-center gap-x-3 font-sans text-[13px]">
             {listing.links.map((l) => (

@@ -33,6 +33,7 @@ import * as listingOrdersRoute from '@/app/api/v1/listings/[id]/orders/route';
 import * as listingMarketRoute from '@/app/api/v1/listings/[id]/market/route';
 import * as listingTextRoute from '@/app/api/v1/listings/[id]/text/route';
 import * as listingClosedRoute from '@/app/api/v1/listings/[id]/closed/route';
+import * as listingWithdrawnRoute from '@/app/api/v1/listings/[id]/withdrawn/route';
 import * as listingViewRoute from '@/app/api/v1/listings/[id]/view/route';
 import * as listingCitationsRoute from '@/app/api/v1/listings/[id]/citations/route';
 import * as listingRelatedRoute from '@/app/api/v1/listings/[id]/related/route';
@@ -112,6 +113,7 @@ const ROUTES: [pattern: string, mod: Mod][] = [
   ['/listings/[id]/market', listingMarketRoute],
   ['/listings/[id]/text', listingTextRoute],
   ['/listings/[id]/closed', listingClosedRoute],
+  ['/listings/[id]/withdrawn', listingWithdrawnRoute],
   ['/listings/[id]/view', listingViewRoute],
   ['/listings/[id]/citations', listingCitationsRoute],
   ['/listings/[id]/related', listingRelatedRoute],

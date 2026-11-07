@@ -41,6 +41,8 @@ type Status = 'all';
 const PAGE = 50;
 /** Followed papers per page in the "Following" section; `?fpage=` pages it. */
 const FOLLOWING_PAGE = 10;
+/** Withdrawn papers per page in the section under a search's results; `?wpage=` pages it. */
+const WITHDRAWN_PAGE = 10;
 /** The cookie remembering whether that section was left collapsed. */
 const FOLLOWING_COOKIE = 'home_following_open';
 
@@ -179,12 +181,16 @@ export default async function Home({
   const onlyFollowed = viewer !== null && one(sp.following) === '1';
   // ?tldr=1: each paper's TLDR under its authors.
   const showTldr = one(sp.tldr) === '1';
+  // Withdrawn papers are left out of the list. ?withdrawn=1 puts them back in it, labelled; a search without
+  // it lists those it finds apart, under its results. Papers the viewer chose to follow stay, labelled.
+  const showWithdrawn = one(sp.withdrawn) === '1';
+  const inList = showWithdrawn || onlyFollowed;
   // Papers the viewer follows are pinned above the list: same venue and sort,
   // paged on their own, and not repeated. Not while searching, nor when the
   // list is already only followed papers.
   const pins = me !== null && !q && !onlyFollowed;
   const browse = { kind, status, sort };
-  const [all, followed, notes] = await Promise.all([
+  const [all, followed, withdrawnHits, notes] = await Promise.all([
     pageOf(sp.page, PAGE, {
       ...browse,
       kind: kindFilter,
@@ -193,8 +199,18 @@ export default async function Home({
       followedBy: onlyFollowed ? me : null,
       exceptFollowedBy: pins ? me : null,
       recommendFor: me,
+      withdrawn: inList ? 'include' : 'hide',
     }),
     pins ? pageOf(sp.fpage, FOLLOWING_PAGE, { ...browse, followedBy: me }) : null,
+    q && !inList
+      ? pageOf(sp.wpage, WITHDRAWN_PAGE, {
+          kind: kindFilter,
+          status: statusFilter,
+          sort,
+          q,
+          withdrawn: 'only',
+        })
+      : null,
     // The admin's messages: this venue's and every venue's, or all of them when the list is every venue;
     // those for signed-in readers only to a signed-in viewer.
     currentAnnouncements(kind ?? undefined, viewer !== null),
@@ -217,6 +233,7 @@ export default async function Home({
       ...(q ? { q } : {}),
       ...(onlyFollowed ? { following: '1' } : {}),
       ...(showTldr ? { tldr: '1' } : {}),
+      ...(showWithdrawn ? { withdrawn: '1' } : {}),
       ...patch,
     });
     if (!params.get('q')) {
@@ -225,17 +242,21 @@ export default async function Home({
     }
     if (params.get('following') === '0') params.delete('following');
     if (params.get('tldr') === '0') params.delete('tldr');
-    for (const key of ['page', 'fpage']) if (params.get(key) === '1') params.delete(key);
+    if (params.get('withdrawn') === '0') params.delete('withdrawn');
+    for (const key of ['page', 'fpage', 'wpage']) if (params.get(key) === '1') params.delete(key);
     return `/?${params}`;
   };
   // A pager's link to page `p` of its section, keeping the other sections' pages.
-  const pages = { page: String(all.page), fpage: String(followed?.page ?? 1) };
+  const pages = { page: String(all.page), fpage: String(followed?.page ?? 1), wpage: String(withdrawnHits?.page ?? 1) };
   const pageHref = (key: keyof typeof pages, anchor: string) => (p: number) =>
     `${href({ ...pages, [key]: String(p) })}${anchor}`;
   const filtered = kindFilter !== null;
   const pinnedCount = followed?.total ?? 0;
+  const withdrawnCount = withdrawnHits?.total ?? 0;
   // Shown on the ⋯ trigger when not the defaults.
-  const activeFilters = [onlyFollowed && '★', showTldr && 'tldr'].filter(Boolean).join(', ');
+  const activeFilters = [onlyFollowed && '★', showTldr && 'tldr', showWithdrawn && 'withdrawn']
+    .filter(Boolean)
+    .join(', ');
   // The ⋯ trigger also names a sort picked from its menu, since the row doesn't show it.
   const menuSort = MENU_SORTS.includes(sort) ? sortLabel(sort) : null;
   const moreLabel = [menuSort, activeFilters].filter(Boolean).join(', ');
@@ -263,6 +284,7 @@ export default async function Home({
         <input type="hidden" name="kind" value={kind ?? 'all'} />
         {onlyFollowed && <input type="hidden" name="following" value="1" />}
         {showTldr && <input type="hidden" name="tldr" value="1" />}
+        {showWithdrawn && <input type="hidden" name="withdrawn" value="1" />}
         <SearchInput
           name="q"
           defaultValue={q ?? ''}
@@ -311,6 +333,11 @@ export default async function Home({
                 show TLDRs
               </Link>
             </PopoverClose>
+            <PopoverClose asChild>
+              <Link href={href({ withdrawn: showWithdrawn ? '0' : '1' })} className={showWithdrawn ? ON : ''}>
+                show withdrawn
+              </Link>
+            </PopoverClose>
             <details className="border-t border-rule pt-2.5">
               <summary className={`${ui.runIn} cursor-pointer`}>Search syntax</summary>
               <div className="mt-2 text-xs leading-normal text-muted">
@@ -328,7 +355,14 @@ export default async function Home({
       {q && (
         <div className="mt-2 font-sans text-[13px] text-muted">
           {all.total.toLocaleString('en')} {all.total === 1 ? 'result' : 'results'} for “{q}”
-          {filtered && <> in {kindFilter ?? 'all venues'}.</>} <Link href={href({ q: '' })}>clear</Link>
+          {filtered && <> in {kindFilter ?? 'all venues'}.</>}
+          {withdrawnCount > 0 && (
+            <>
+              {' '}
+              <a href="#withdrawn">{withdrawnCount.toLocaleString('en')} withdrawn</a> listed apart.
+            </>
+          )}{' '}
+          <Link href={href({ q: '' })}>clear</Link>
         </div>
       )}
 
@@ -349,7 +383,7 @@ export default async function Home({
           {/* Not a flex box: an icon alone gives a flex item no text baseline, and the row aligns on
               baselines. Inline, `align-middle` centres the dots on the text's x-height. */}
           <PopoverTrigger
-            title="More filters: following, TLDRs"
+            title="More filters: following, TLDRs, withdrawn"
             className="-my-1 cursor-pointer px-1 py-1 text-ink hover:text-accent"
           >
             {moreLabel}
@@ -375,11 +409,16 @@ export default async function Home({
                 show TLDRs
               </Link>
             </PopoverClose>
+            <PopoverClose asChild>
+              <Link href={href({ withdrawn: showWithdrawn ? '0' : '1' })} className={showWithdrawn ? ON : ''}>
+                show withdrawn
+              </Link>
+            </PopoverClose>
           </PopoverContent>
         </Popover>
       </div>
 
-      {all.total + pinnedCount === 0 &&
+      {all.total + pinnedCount + withdrawnCount === 0 &&
         (q ? (
           <div className={ui.empty}>
             No {onlyFollowed ? 'papers you follow' : 'papers'} match “{q}”.
@@ -422,6 +461,18 @@ export default async function Home({
             <Row key={rowKey(r)} r={r} tldr={showTldr} />
           ))}
           <Pager page={all.page} pages={all.pages} href={pageHref('page', pinnedCount > 0 ? '#all' : '')} />
+        </section>
+      )}
+
+      {withdrawnHits && withdrawnCount > 0 && (
+        <section id="withdrawn">
+          <h2 className={ui.backHeading}>
+            Withdrawn <span className="font-normal">({withdrawnCount.toLocaleString('en')})</span>
+          </h2>
+          {withdrawnHits.rows.map((r) => (
+            <Row key={rowKey(r)} r={r} tldr={showTldr} />
+          ))}
+          <Pager page={withdrawnHits.page} pages={withdrawnHits.pages} href={pageHref('wpage', '#withdrawn')} />
         </section>
       )}
 
@@ -470,6 +521,7 @@ function Row({ r, tldr }: { r: BrowseRow; tldr: boolean }) {
       tldr={tldr ? r.listing?.tldr : null}
       rating={r.reviewMean}
       ratingCount={r.reviewCount}
+      withdrawn={r.listing?.withdrawnAt != null}
       href={r.listing ? `/papers/${r.listing.slug}` : `/markets/${r.main?.market.slug}`}
     />
   );

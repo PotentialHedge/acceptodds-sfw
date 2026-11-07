@@ -21,6 +21,7 @@ export function PaperRow({
   tldr,
   rating,
   ratingCount = 0,
+  withdrawn = false,
   href,
   onPick,
 }: {
@@ -32,6 +33,8 @@ export function PaperRow({
   /** The mean review rating, on the venue's scale, at the row's right; nothing when null. */
   rating?: number | null;
   ratingCount?: number;
+  /** Labelled as withdrawn from its venue. */
+  withdrawn?: boolean;
   /** Accepted from the market edition's callers and never drawn: no prices in the safe for work edition. */
   market?: RowMarket | null;
   volumeMicro?: bigint | string | null;
@@ -62,7 +65,13 @@ export function PaperRow({
             {name}
           </Link>
         )}
-        {authors.length > 0 && <span className="block font-sans text-xs text-muted">{authorLine(authors)}</span>}
+        {(withdrawn || authors.length > 0) && (
+          <span className="block font-sans text-xs text-muted">
+            {withdrawn && <span className="text-down">Withdrawn</span>}
+            {withdrawn && authors.length > 0 && ' · '}
+            {authorLine(authors)}
+          </span>
+        )}
         {tldr && (
           <span className="mt-0.5 block text-[13px] leading-snug text-muted">
             <MathText text={tldr} />

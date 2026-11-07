@@ -143,6 +143,25 @@ export async function setClosed(
 }
 
 /**
+ * Mark a listing withdrawn from its venue, or not any more (a withdrawal can be
+ * reverted). Idempotent, and keeps the time it was first marked.
+ */
+export async function setWithdrawn(
+  listing: Pick<Listing, 'id'>,
+  withdrawn: boolean,
+  database: Database = getDb(),
+): Promise<Date | null> {
+  const [row] = await database
+    .update(listings)
+    .set({ withdrawnAt: withdrawn ? sql`coalesce(${listings.withdrawnAt}, now())` : null })
+    .where(eq(listings.id, listing.id))
+    .returning({ withdrawnAt: listings.withdrawnAt });
+  invalidateBrowseReads();
+  invalidateMap();
+  return row?.withdrawnAt ?? null;
+}
+
+/**
  * Replace a listing's related listings with this list, in order (best first).
  * Whole-list replacement, like the bibliography, but a call of its own: the
  * similarity service writes this, `../research` writes the listing. A listing

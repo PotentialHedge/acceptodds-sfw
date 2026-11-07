@@ -34,7 +34,7 @@ import {
   rotateInvite,
   updateGroup,
 } from '../groups';
-import { setClosed, setRelated, setText, upsertListing } from '../listings';
+import { setClosed, setRelated, setText, setWithdrawn, upsertListing } from '../listings';
 import { setMap } from '../map';
 import { currentAnnouncements, deleteAnnouncement as deleteAnnouncementRow, postAnnouncement } from '../announcements';
 import { mapCached } from '../map-cache';
@@ -318,6 +318,17 @@ async function setListingClosed(req: Request, id: string | string[] | undefined,
   const listing = await resolveListing(parseParam(id, S.ListingRef, 'id'));
   const closedAt = await setClosed(listing, closed);
   return respond(S.SetClosedResult, { listingId: listing.id, closedAt: toIsoOrNull(closedAt) }, { principal });
+}
+
+/** Mark a listing withdrawn from its venue (`PUT`), or not any more (`DELETE`). Idempotent. */
+export const putListingWithdrawn = route(async (req, params) => setListingWithdrawn(req, params.id, true));
+export const deleteListingWithdrawn = route(async (req, params) => setListingWithdrawn(req, params.id, false));
+
+async function setListingWithdrawn(req: Request, id: string | string[] | undefined, withdrawn: boolean) {
+  const principal = await requireAuth(req, 'admin');
+  const listing = await resolveListing(parseParam(id, S.ListingRef, 'id'));
+  const withdrawnAt = await setWithdrawn(listing, withdrawn);
+  return respond(S.SetWithdrawnResult, { listingId: listing.id, withdrawnAt: toIsoOrNull(withdrawnAt) }, { principal });
 }
 
 /** Replace a listing's related list. Written by `listings.ts`; not market state. */

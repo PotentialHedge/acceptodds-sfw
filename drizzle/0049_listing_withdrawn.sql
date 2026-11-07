@@ -1,0 +1,1 @@
+ALTER TABLE "listings" ADD COLUMN "withdrawn_at" timestamp with time zone;
