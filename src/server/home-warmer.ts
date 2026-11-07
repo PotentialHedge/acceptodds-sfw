@@ -12,6 +12,23 @@ const AFTER_START_MS = 3_000;
 
 let started = false;
 
+declare global {
+  /** The first warm-up, while it runs: on `globalThis`, since `/healthz` is bundled apart from this. */
+  var __papermarketWarming: { since: number; done: boolean } | undefined;
+}
+
+/** Longest the first warm-up holds `/healthz` back: a database that is down must not keep a server out. */
+const WARMING_AT_MOST_MS = 60_000;
+
+/**
+ * Whether the server is still on its first warm-up, so not ready for visitors: `/healthz` answers 503
+ * meanwhile, and the swap (and Traefik) wait. False when nothing warms, as in the tests.
+ */
+export function warming(): boolean {
+  const w = globalThis.__papermarketWarming;
+  return w !== undefined && !w.done && Date.now() - w.since < WARMING_AT_MOST_MS;
+}
+
 /** The home page, from this server itself, past the gate. Its failure is only logged. */
 async function selfVisit(): Promise<void> {
   try {
@@ -68,6 +85,14 @@ export function startHomeWarmer(): void {
   // The first run is followed by a request for the home page, as a visitor's: the first render of a
   // fresh server loads its code and other reads (1.5 s on dev, with the list already warm), and it should
   // not be a visitor who waits for it, the first one after a deploy.
-  setTimeout(() => void run().then(selfVisit), AFTER_START_MS).unref?.();
+  // Until then `/healthz` says the server is starting, so no visitor is sent to it cold (`warming`).
+  globalThis.__papermarketWarming = { since: Date.now(), done: false };
+  setTimeout(
+    () =>
+      void run()
+        .then(selfVisit)
+        .finally(() => (globalThis.__papermarketWarming!.done = true)),
+    AFTER_START_MS,
+  ).unref?.();
   setInterval(() => void run(), REFRESH_MS).unref?.();
 }
