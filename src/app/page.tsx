@@ -7,6 +7,8 @@ import { FilterIcon, MoreIcon } from '@/components/icons';
 import { Pager } from '@/components/Pager';
 import { SearchSyntax } from '@/components/SearchSyntax';
 import { SearchInput } from '@/components/SearchInput';
+import { ExampleLink, ExampleResults } from '@/components/SearchExamples';
+import { exampleOf, pickExamples } from '@/lib/search-examples';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from '@/components/Popover';
 import { PaperRow } from '@/components/PaperRow';
 import { ScrollingLink } from '@/components/ScrollLink';
@@ -158,6 +160,10 @@ export default async function Home({
   // The search syntax (`lib/query.ts`). A `venue:` or `status:` in the query
   // says where to look, so the page's own filter of that kind steps aside.
   const parsed = q ? parseSearch(q) : null;
+  // Example searches: one as the box's placeholder, another as a link under it, at random per page.
+  const [boxExample, linkExample] = pickExamples();
+  // A search that is one of them counts the papers opened from it.
+  const fromExample = exampleOf(q);
   const kindFilter = parsed?.fields.has('venue') ? null : kind;
   const statusFilter: Status = status;
   const viewer = await viewerFromHeaders(await headers());
@@ -290,7 +296,7 @@ export default async function Home({
           defaultValue={q ?? ''}
           maxLength={SEARCH_MAX_LENGTH}
           aria-label="Search papers"
-          placeholder="Search papers"
+          example={q ? undefined : boxExample}
           className={ui.searchInput}
         />
         <button type="submit" className={ui.searchBtn}>
@@ -347,6 +353,11 @@ export default async function Home({
           </PopoverContent>
         </Popover>
       </form>
+      {!q && (
+        <div className="mt-1.5 font-sans text-[13px] text-muted">
+          Try <ExampleLink id={linkExample.id} q={linkExample.q} href={href({ q: linkExample.q, sort: 'relevance' })} />
+        </div>
+      )}
 
       {parsed && parsed.errors.length > 0 && (
         <div className="mt-2 font-sans text-[13px] text-down">Ignored: {parsed.errors.join('; ')}</div>
@@ -448,33 +459,35 @@ export default async function Home({
         </Collapsible>
       )}
 
-      {all.total > 0 && (
-        <section id="all">
-          {pinnedCount > 0 ? (
-            <h2 className={`mt-7 mb-2 ${ui.section}`}>
-              All papers <span className="font-normal">({all.total.toLocaleString('en')})</span>
-            </h2>
-          ) : (
-            <div className="h-3.5" />
-          )}
-          {all.rows.map((r) => (
-            <Row key={rowKey(r)} r={r} tldr={showTldr} />
-          ))}
-          <Pager page={all.page} pages={all.pages} href={pageHref('page', pinnedCount > 0 ? '#all' : '')} />
-        </section>
-      )}
+      <MaybeExampleResults id={fromExample?.id}>
+        {all.total > 0 && (
+          <section id="all">
+            {pinnedCount > 0 ? (
+              <h2 className={`mt-7 mb-2 ${ui.section}`}>
+                All papers <span className="font-normal">({all.total.toLocaleString('en')})</span>
+              </h2>
+            ) : (
+              <div className="h-3.5" />
+            )}
+            {all.rows.map((r) => (
+              <Row key={rowKey(r)} r={r} tldr={showTldr} />
+            ))}
+            <Pager page={all.page} pages={all.pages} href={pageHref('page', pinnedCount > 0 ? '#all' : '')} />
+          </section>
+        )}
 
-      {outHits && outCount > 0 && (
-        <section id="out">
-          <h2 className={ui.backHeading}>
-            Withdrawn or desk rejected <span className="font-normal">({outCount.toLocaleString('en')})</span>
-          </h2>
-          {outHits.rows.map((r) => (
-            <Row key={rowKey(r)} r={r} tldr={showTldr} />
-          ))}
-          <Pager page={outHits.page} pages={outHits.pages} href={pageHref('opage', '#out')} />
-        </section>
-      )}
+        {outHits && outCount > 0 && (
+          <section id="out">
+            <h2 className={ui.backHeading}>
+              Withdrawn or desk rejected <span className="font-normal">({outCount.toLocaleString('en')})</span>
+            </h2>
+            {outHits.rows.map((r) => (
+              <Row key={rowKey(r)} r={r} tldr={showTldr} />
+            ))}
+            <Pager page={outHits.page} pages={outHits.pages} href={pageHref('opage', '#out')} />
+          </section>
+        )}
+      </MaybeExampleResults>
 
       {!q && FOOTNOTE}
       <p className="mt-6 font-sans text-xs text-muted">
@@ -484,6 +497,11 @@ export default async function Home({
       </p>
     </main>
   );
+}
+
+/** The results, counted for Umami when the search is one of the examples. */
+function MaybeExampleResults({ id, children }: { id: string | undefined; children: React.ReactNode }) {
+  return id ? <ExampleResults id={id}>{children}</ExampleResults> : <>{children}</>;
 }
 
 /** The search syntax (`lib/query.ts`), behind a `?` beside the Search button. */

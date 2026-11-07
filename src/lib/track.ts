@@ -47,7 +47,12 @@ export type EventName =
   | 'follow_toggled'
   | 'share_copied'
   // a share button that opens another service's share page
-  | 'share_sent';
+  | 'share_sent'
+  // the home page's example searches (`lib/search-examples.ts`): shown (once per page, for each
+  // place), used (Tab in the box, or the link), and a paper opened from an example's results
+  | 'search_example_shown'
+  | 'search_example_used'
+  | 'search_example_result_opened';
 
 export interface EventData {
   /** A refusal or failure: the error code, never its message. */
@@ -64,9 +69,11 @@ export interface EventData {
    * What was copied: 'paper' | 'badge' | 'profile'; or where it was sent: 'x' | 'whatsapp'; or where the
    * tutorial's last button went: 'welcome' | 'close'; or where a sign-up started: 'bet' | 'open_market' |
    * 'email'; or what a Finish step did: 'bet_placed' | 'bet_skipped' | 'name' | 'password'; or what opened a
-   * market: 'click' | 'return'.
+   * market: 'click' | 'return'; or where an example search was shown or used: 'placeholder' | 'link'.
    */
   target?: string;
+  /** An example search's id (`lib/search-examples.ts`), never the query someone typed. */
+  example?: string;
   /** A tutorial step, counted from 1. */
   step?: number;
 }
