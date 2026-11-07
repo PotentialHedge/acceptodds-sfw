@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { upsertListing } from '@/server/listings';
 import { getDb } from '@/db';
 import { factorMeans } from '@/lib/reviews';
-import { clearReviewFieldCache, reviewFactorFields, reviewField } from '@/server/review-field';
+import { clearReviewFieldCache, reviewFactorFields, reviewField, reviewQueryCohort } from '@/server/review-field';
 import { reviewsOf, setReviews } from '@/server/reviews';
 import { browseListings } from '@/server/views';
 import { api, trader } from './api-client';
@@ -115,6 +115,54 @@ describe('reviewField', () => {
     expect(await reviewField('ICLR 2027', null)).toBeNull();
     expect(await reviewField(null, 3)).toBeNull();
     expect(await reviewField('ICLR 2027', 3)).toBeNull();
+  });
+});
+
+describe('the review distribution among a search', () => {
+  const titled = async (slug: string, title: string, kind = 'ICLR 2027') =>
+    (await upsertListing({ slug, title, kind })).listing;
+  const write = async (l: { id: string; slug: string }, ratings: number[]) =>
+    setReviews(
+      l as any,
+      ratings.map((r, i) => rated(`${l.slug}-${i}`, r)),
+    );
+
+  it('places the paper among the venue’s reviewed papers the query finds, itself left out', async () => {
+    const me = await titled('me', 'Diffusion for me');
+    await write(me, [3]);
+    // Six diffusion papers: 1, 2, 2, 4, 4, 4. Three others that do not match, and one elsewhere that does.
+    const ratings = [1, 2, 2, 4, 4, 4];
+    for (const [i, r] of ratings.entries()) await write(await titled(`d${i}`, `Diffusion model ${i}`), [r]);
+    for (const i of [0, 1, 2]) await write(await titled(`o${i}`, `Graph thing ${i}`), [1]);
+    await write(await titled('far', 'Diffusion far away', 'Other'), [10]);
+
+    const view = await reviewQueryCohort(me, 'diffusion');
+    expect(view.errors).toEqual([]);
+    expect(view.papers).toBe(6);
+    const overall = view.series[0];
+    expect(overall.mean).toBe(3);
+    expect(overall.field.papers).toBe(6);
+    expect(overall.field.ahead).toBe(50); // 3 of the 6 below it
+    expect(overall.field.domain).toEqual([1, 4]); // the venue’s scale, not the far venue’s
+    expect(overall.field.reference).toBeDefined();
+
+    // Filters and the parser’s errors come through; too few found draws nothing.
+    const few = await reviewQueryCohort(me, 'title:graph accept>=200');
+    expect(few.series).toEqual([]);
+    expect(few.papers).toBe(3);
+    expect(few.errors).toHaveLength(1);
+    expect((await reviewQueryCohort(me, '   ')).papers).toBe(0);
+  });
+
+  it('answers over the API', async () => {
+    const me = await titled('me', 'Diffusion for me');
+    await write(me, [3]);
+    for (const i of [0, 1, 2, 3, 4]) await write(await titled(`d${i}`, `Diffusion ${i}`), [(i % 4) + 1]);
+    const got = await api('GET', `/listings/${me.slug}/review-query?q=${encodeURIComponent('rating>=1 diffusion')}`);
+    expect(got.status).toBe(200);
+    expect(got.body.papers).toBe(5);
+    expect(got.body.series[0].field.papers).toBe(5);
+    expect((await api('GET', `/listings/nope/review-query?q=x`)).status).toBe(404);
   });
 });
 

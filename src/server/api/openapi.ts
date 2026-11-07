@@ -225,6 +225,20 @@ export function buildRegistry(): OpenAPIRegistry {
   r.registerPath(
     op({
       method: 'get',
+      path: '/listings/{id}/review-query',
+      tags: ['listings'],
+      summary: 'A listing’s scores among the papers a search finds',
+      description:
+        'Where a listing’s review scores sit among the reviewed papers at its venue that `q` finds, in the home page’s search syntax. Every status, withdrawn papers included, unless the query says otherwise. Public; a browser may keep it a minute.',
+      request: { params: z.object({ id: S.ListingRef }), query: S.ReviewQueryQuery },
+      ok: { status: 200, schema: S.ReviewQuery, description: 'The scores among the papers found.' },
+      errors: { 404: 'not_found' },
+    }),
+  );
+
+  r.registerPath(
+    op({
+      method: 'get',
       path: '/listings/{id}/minimap',
       tags: ['listings'],
       summary: 'A listing’s piece of the paper map',

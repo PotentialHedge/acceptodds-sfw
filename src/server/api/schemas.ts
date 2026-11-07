@@ -365,6 +365,38 @@ export const ReviewCohorts = z
       'Where a listing’s review scores sit among the papers nearest it in embedding space and among its related papers. A cohort with too few reviewed papers is left out.',
   });
 
+export const ReviewQueryQuery = z.object({
+  q: SearchQuery.meta({
+    description: 'The home page’s search syntax (see `/map/search`), within the listing’s venue. Blank finds nothing.',
+    example: 'author:bengio rating>=3',
+  }),
+});
+
+export const ReviewQuery = z
+  .object({
+    series: z
+      .array(
+        z.object({
+          label: z.string(),
+          mean: z.number().meta({ description: 'This listing’s mean on the score.' }),
+          count: z.number().int().min(0).meta({ description: 'Reviews of this listing that gave it.' }),
+          field: CohortField,
+        }),
+      )
+      .meta({ description: 'One per score enough of the papers found have; empty when too few do.' }),
+    papers: z
+      .number()
+      .int()
+      .min(0)
+      .meta({ description: 'Reviewed papers the search found at the venue, this listing left out.' }),
+    errors: z.array(z.string()).meta({ description: 'Terms the parser could not use and left out.' }),
+  })
+  .meta({
+    id: 'ReviewQuery',
+    description:
+      'Where a listing’s review scores sit among the reviewed papers at its venue that a search finds, on the venue’s scale.',
+  });
+
 export const Minimap = z
   .object({
     points: z.array(MapPoint).meta({ description: 'The listing, the papers nearest it and its related papers.' }),

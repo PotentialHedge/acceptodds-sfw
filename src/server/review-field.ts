@@ -19,8 +19,10 @@ import {
   type ReviewFactor,
 } from '@/lib/reviews';
 import { listingRelated, listings, type Listing } from '@/db/schema';
+import { normalizeSearch } from '@/lib/search';
 import { ReadCache } from './read-cache';
 import { reviewsOf } from './reviews';
+import { searchReviewMeans, type ReviewMeans } from './views';
 import { nearestIn, vectorIndexes } from './vector-index';
 
 /**
@@ -162,6 +164,84 @@ async function relatedIds(listingId: string, database: Database): Promise<string
   return rows.map((r) => r.id);
 }
 
+/** A paper's own means, each with the column it is read from. */
+type OwnScore = { label: string; mean: number; count: number; column: 'rating' | ReviewFactor };
+
+/** The paper's reviewed scores, the overall first. Empty for a paper with no venue or no reviews. */
+async function ownScores(listing: Listing, database: Database): Promise<OwnScore[]> {
+  const reviews = (await reviewsOf(listing.id, database)).filter((r) => r.kind === 'review');
+  const mean = meanRating(reviews.map((r) => r.rating));
+  return [
+    ...(mean === null
+      ? []
+      : [{ label: OVERALL, mean, count: reviews.filter((r) => r.rating !== null).length, column: 'rating' as const }]),
+    ...factorMeans(reviews).flatMap((f) => {
+      const column = factorOf(f.label);
+      return column ? [{ ...f, column }] : [];
+    }),
+  ];
+}
+
+/**
+ * The paper's scores among `members` (their means, by id; the paper itself is
+ * left out), each on its venue's scale with the venue's shape behind it. A
+ * score fewer than `MIN_COHORT` of them have is left out.
+ */
+async function placedAmong(
+  kind: string,
+  own: readonly OwnScore[],
+  members: ReadonlyMap<string, ReviewMeans>,
+  database: Database,
+): Promise<ReviewSeries[]> {
+  const series = await Promise.all(
+    own.map(async ({ label, mean, count, column }) => {
+      const venue = await placed(kind, column, mean, database);
+      if (!venue) return null;
+      const means = [...members.values()]
+        .flatMap((m) => (m[column] === null ? [] : [roundMean(m[column])]))
+        .sort((a, b) => a - b);
+      if (means.length < MIN_COHORT) return null;
+      const atoms = atomsOf(means);
+      const field: ReviewField = {
+        kind,
+        domain: venue.domain,
+        curve: curveToSend(densityCurve(atoms, venue.domain, COHORT_BANDWIDTH)),
+        atoms,
+        // `means` leaves the paper out, and `percentAhead` is told the field with it.
+        ahead: percentAhead(countBelow(means, mean), means.length + 1),
+        papers: means.length,
+        reference: curveToSend(venue.curve),
+      };
+      return { label, mean, count, field };
+    }),
+  );
+  return series.filter((s) => s !== null);
+}
+
+/** Every reviewed paper's means at `kind`, by id, among `ids`. */
+async function meansOf(kind: string, ids: readonly string[], database: Database): Promise<Map<string, ReviewMeans>> {
+  if (ids.length === 0) return new Map();
+  const columns = sql.raw(REVIEW_FACTORS.map((f) => `avg(r.${f})::float8 as ${f}`).join(', '));
+  const { rows } = await database.execute<ReviewMeans>(sql`
+    select r.listing_id as id, avg(r.rating)::float8 as rating, ${columns}
+      from listing_reviews r join listings l on l.id = r.listing_id
+     where l.kind = ${kind} and r.kind = 'review'
+       and r.listing_id in (${sql.join(
+         ids.map((id) => sql`${id}::uuid`),
+         sql`, `,
+       )})
+     group by r.listing_id
+  `);
+  return new Map(rows.map((r) => [r.id, r]));
+}
+
+/** `members` without `id`. */
+function without(members: ReadonlyMap<string, ReviewMeans>, id: string): Map<string, ReviewMeans> {
+  const out = new Map(members);
+  out.delete(id);
+  return out;
+}
+
 /**
  * Where a paper's mean on each score sits among the papers nearest it in
  * embedding space, and among its related papers, on its venue's scale. Only
@@ -173,69 +253,66 @@ async function relatedIds(listingId: string, database: Database): Promise<string
 export async function reviewCohorts(listing: Listing, database: Database = getDb()): Promise<ReviewCohortView[]> {
   const kind = listing.kind;
   if (kind === null) return [];
-  const reviews = (await reviewsOf(listing.id, database)).filter((r) => r.kind === 'review');
-  const mean = meanRating(reviews.map((r) => r.rating));
-  const own = [
-    ...(mean === null
-      ? []
-      : [{ label: OVERALL, mean, count: reviews.filter((r) => r.rating !== null).length, column: 'rating' as const }]),
-    ...factorMeans(reviews).flatMap((f) => {
-      const column = factorOf(f.label);
-      return column ? [{ ...f, column }] : [];
-    }),
-  ];
+  const own = await ownScores(listing, database);
   if (own.length === 0) return [];
 
   const [nearest, related] = await Promise.all([nearestIds(listing.id, database), relatedIds(listing.id, database)]);
   const ids = [...new Set([...nearest, ...related])].filter((id) => id !== listing.id);
   if (ids.length === 0) return [];
-  const columns = sql.raw(REVIEW_FACTORS.map((f) => `avg(r.${f})::float8 as ${f}`).join(', '));
-  const { rows } = await database.execute<{ id: string } & Record<'rating' | ReviewFactor, number | null>>(sql`
-    select r.listing_id as id, avg(r.rating)::float8 as rating, ${columns}
-      from listing_reviews r join listings l on l.id = r.listing_id
-     where l.kind = ${kind} and r.kind = 'review'
-       and r.listing_id in (${sql.join(
-         ids.map((id) => sql`${id}::uuid`),
-         sql`, `,
-       )})
-     group by r.listing_id
-  `);
-  const byId = new Map(rows.map((r) => [r.id, r]));
+  const byId = await meansOf(kind, ids, database);
 
   const compute = async (cohort: ReviewCohort, members: string[]): Promise<ReviewCohortView | null> => {
-    const series = await Promise.all(
-      own.map(async ({ label, mean, count, column }) => {
-        const venue = await placed(kind, column, mean, database);
-        if (!venue) return null;
-        const means = members
-          .flatMap((id) => {
-            const m = byId.get(id)?.[column];
-            return m === null || m === undefined ? [] : [roundMean(m)];
-          })
-          .sort((a, b) => a - b);
-        if (means.length < MIN_COHORT) return null;
-        const atoms = atomsOf(means);
-        const field: ReviewField = {
-          kind,
-          domain: venue.domain,
-          curve: curveToSend(densityCurve(atoms, venue.domain, COHORT_BANDWIDTH)),
-          atoms,
-          // `means` leaves the paper out, and `percentAhead` is told the field with it.
-          ahead: percentAhead(countBelow(means, mean), means.length + 1),
-          papers: means.length,
-          reference: curveToSend(venue.curve),
-        };
-        return { label, mean, count, field };
-      }),
-    );
-    const drawn = series.filter((s) => s !== null);
-    return drawn.length > 0 ? { cohort, series: drawn } : null;
+    const chosen = new Map(members.flatMap((id) => (id !== listing.id && byId.has(id) ? [[id, byId.get(id)!]] : [])));
+    const series = await placedAmong(kind, own, chosen, database);
+    return series.length > 0 ? { cohort, series } : null;
   };
   const cohorts = await Promise.all([compute('nearest', nearest), compute('related', related)]);
   return cohorts.filter((c) => c !== null);
 }
 
+/** A paper's scores among the papers a search finds. */
+export interface ReviewQueryView {
+  /** Empty when the query finds too few reviewed papers (or the paper has no scores). */
+  series: ReviewSeries[];
+  /** Reviewed papers the query found at the venue, the paper itself left out. */
+  papers: number;
+  /** Terms the parser could not use and left out. */
+  errors: string[];
+}
+
+/** What a search finds at a venue moves only with reviews and trades: a few minutes is fresh enough. */
+const QUERY_TTL_MS = 5 * 60_000;
+const queries = new ReadCache(200);
+
+/**
+ * Where a paper's mean on each score sits among the reviewed papers at its
+ * venue that `q`, in the home page's search syntax, finds
+ * (`views.searchReviewMeans`), on its venue's scale. Never the paper itself,
+ * whether the query finds it or not. A venue's matches are cached per query,
+ * so every paper asking the same question shares one search.
+ */
+export async function reviewQueryCohort(
+  listing: Listing,
+  q: string | null | undefined,
+  database: Database = getDb(),
+): Promise<ReviewQueryView> {
+  const kind = listing.kind;
+  const text = normalizeSearch(q);
+  if (kind === null || text === null) return { series: [], papers: 0, errors: [] };
+  const search = async () => {
+    const { rows, errors } = await searchReviewMeans(text, kind, database);
+    return { members: new Map(rows.map((r) => [r.id, r])), errors };
+  };
+  const { members, errors } = await (database === getDb()
+    ? queries.get(`${kind}\n${text}`, QUERY_TTL_MS, search)
+    : search());
+  const others = without(members, listing.id);
+  const own = await ownScores(listing, database);
+  return { series: await placedAmong(kind, own, others, database), papers: others.size, errors };
+}
+
 /** After a test's writes. */
 export function clearReviewFieldCache(): void {
   venues.clear();
+  queries.clear();
 }

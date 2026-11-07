@@ -74,7 +74,7 @@ import {
   resolveListing,
   resolveMarket,
 } from '../views';
-import { reviewCohorts } from '../review-field';
+import { reviewCohorts, reviewQueryCohort } from '../review-field';
 import { ApiError } from './errors';
 import {
   clientIp,
@@ -444,6 +444,17 @@ export const getListingReviewCohorts = route(async (req, params) => {
     prepare(S.ReviewCohorts, { cohorts: await reviewCohorts(listing) }),
   );
   return preparedResponse(req, prepared, { principal, headers: { 'Cache-Control': MAP_CACHE_CONTROL } });
+});
+
+/** A listing's scores among the papers a search finds at its venue, asked for when the reader searches. Public. */
+export const getListingReviewQuery = route(async (req, params) => {
+  const principal = await authenticate(req);
+  const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
+  const { q } = parseQuery(req, S.ReviewQueryQuery);
+  return respond(S.ReviewQuery, await reviewQueryCohort(listing, q), {
+    principal,
+    headers: { 'Cache-Control': 'public, max-age=60' },
+  });
 });
 
 /** Replace one venue's paper map. Written by `map.ts`; not market state. */

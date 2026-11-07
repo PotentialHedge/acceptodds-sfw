@@ -2021,6 +2021,40 @@ export async function mapSearch(
   return { slugs: result.rows.map((r) => r.slug), errors };
 }
 
+/** One reviewed listing's mean on each score: `null` for a score no review of it gave. */
+export type ReviewMeans = { id: string } & Record<'rating' | ReviewFactor, number | null>;
+
+/**
+ * The mean of each review score of every reviewed listing in a venue that the
+ * home page's search (`lib/query.ts` syntax) finds, for the review
+ * distribution to draw them as a cohort (`review-field.reviewQueryCohort`).
+ * Every status, the withdrawn and desk-rejected included, as the venue's own
+ * distribution counts them; a query narrows that with `status:` or `outcome:`.
+ * `errors` are the terms the parser dropped. Nothing usable finds nothing.
+ */
+export async function searchReviewMeans(
+  q: string | null | undefined,
+  kind: string,
+  database: Database = getDb(),
+): Promise<{ rows: ReviewMeans[]; errors: string[] }> {
+  const text = normalizeSearch(q);
+  if (text === null) return { rows: [], errors: [] };
+  const { node, errors } = parseSearch(text);
+  if (node === null) return { rows: [], errors };
+  const { from, searching } = browseQuery({ q: text, kind, status: 'all', sort: 'newest', out: 'include' });
+  const columns = sql.raw(REVIEW_FACTORS.map((f) => `avg(r.${f})::float8 as ${f}`).join(', '));
+  const result = await withSearchPlan(searching, database, (ex) =>
+    ex.execute<ReviewMeans>(sql`
+      with found as (select l.id ${from} and l.id is not null)
+      select r.listing_id as id, avg(r.rating)::float8 as rating, ${columns}
+        from listing_reviews r join found on found.id = r.listing_id
+       where r.kind = 'review'
+       group by r.listing_id
+    `),
+  );
+  return { rows: result.rows, errors };
+}
+
 /** Every `kind` with at least one row, most rows first. A listing counts once, traded or not. */
 export const marketKinds = cache(async (database: Database = getDb()): Promise<{ kind: string; count: number }[]> => {
   const compute = async () => {
