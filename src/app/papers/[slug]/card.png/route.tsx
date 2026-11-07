@@ -9,6 +9,7 @@ import { reviewField, type ReviewField } from '@/server/review-field';
 import { reviewsOf } from '@/server/reviews';
 import { shareSubject, siteName } from '@/server/share';
 import { authorLine } from '@/components/PaperRow';
+import { standingBand } from '@/lib/leaderboard';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ const CURVE = '#555555';
 const RULE = '#bdb8ac';
 
 const PAD = 56;
-const CHART = { width: CARD.width - 2 * PAD, height: 180 };
+const CHART = { width: CARD.width - 2 * PAD, height: 140 };
 const HEADROOM = 10;
 
 const font = readFile(path.join(process.cwd(), 'assets/fonts/LiberationSerif-Regular.ttf'));
@@ -113,7 +114,17 @@ function Card({
         <div style={{ display: 'block', marginTop: 10, fontSize: 25, color: MUTED, lineClamp: 1 }}>{authors}</div>
       )}
       {placed ? (
-        <Chart {...placed} />
+        <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+          {placed.field.ahead !== null && (
+            <div style={{ display: 'flex', flexGrow: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ display: 'flex', alignItems: 'baseline', fontSize: 68, lineHeight: 1 }}>
+                <span style={{ color: ACCENT }}>{standingBand(placed.field.ahead)}</span>
+                <span style={{ fontSize: 40, color: MUTED, marginLeft: 18 }}>of {placed.field.kind}</span>
+              </span>
+            </div>
+          )}
+          <Chart {...placed} />
+        </div>
       ) : (
         <div
           style={{ display: 'block', marginTop: 24, fontSize: 27, lineHeight: 1.35, color: '#444444', lineClamp: 7 }}
@@ -135,10 +146,7 @@ function Chart({ field, mean, count }: { field: ReviewField; mean: number; count
     <div style={{ display: 'flex', flexDirection: 'column', marginTop: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', fontSize: 30, marginBottom: 12 }}>
         <span style={{ color: ACCENT, fontSize: 40, marginRight: 12 }}>{mean.toFixed(2)}</span>
-        <span>
-          mean rating over {reviews}
-          {field.ahead !== null ? `, above ${field.ahead}% of ${field.kind}` : ''}
-        </span>
+        <span>mean rating over {reviews}</span>
       </div>
       {/* Headroom: at the curve's peak the marker would be cut off at the top. */}
       <svg width={width} height={height + HEADROOM} viewBox={`0 ${-HEADROOM} ${width} ${height + HEADROOM}`}>

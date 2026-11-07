@@ -86,7 +86,8 @@ tests/integration/     real Postgres
   (follow, reading list), emoji reactions, related papers with the minimap,
   its citations, and a discussion.
 - **A paper's share card** (`/papers/<slug>/card.png`) shows its title, authors and
-  where its mean rating sits at its venue. The gate carries the same preview
+  where its mean rating sits at its venue, led by a large "Top 1%" or
+  "Bottom 12%". The gate carries the same preview
   tags, since a crawler has no cookie to get past it.
 - **The map** (`/map`) lays out a venue's papers as the map service sent
   them, with the home page's search lighting up matches.
