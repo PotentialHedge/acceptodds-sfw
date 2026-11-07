@@ -10,6 +10,7 @@
  *     graph neural author:hinton accept>=60 -status:settled
  *     (venue:iclr OR venue:neurips) "diffusion model" trades>10
  *     soundness>=2.5 review:"data leakage"
+ *     outcome:withdrawn OR outcome:desk_rejected
  *
  * Words and phrases are full-text search, as before: next to each other in
  * one AND they are merged into a single `websearch_to_tsquery` string, so a
@@ -21,10 +22,11 @@
 
 import { REVIEW_FACTORS } from './reviews';
 import { prefixTsquery } from './search';
+import { VENUE_STATUSES } from './venue-status';
 
 export const TEXT_FIELDS = ['title', 'author', 'keyword', 'area', 'venue'] as const;
 export const NUMBER_FIELDS = ['accept', 'volume', 'trades', 'rating', ...REVIEW_FACTORS] as const;
-export const SEARCH_FIELDS = [...TEXT_FIELDS, 'status', 'review', ...NUMBER_FIELDS] as const;
+export const SEARCH_FIELDS = [...TEXT_FIELDS, 'status', 'outcome', 'review', ...NUMBER_FIELDS] as const;
 export type SearchField = (typeof SEARCH_FIELDS)[number];
 
 /** Every name a field answers to. The first spelling of each is its own name. */
@@ -44,6 +46,9 @@ const ALIASES: Record<string, SearchField> = {
   v: 'venue',
   status: 'status',
   s: 'status',
+  outcome: 'outcome',
+  decision: 'outcome',
+  o: 'outcome',
   accept: 'accept',
   p: 'accept',
   chance: 'accept',
@@ -73,6 +78,12 @@ export const FIELD_HELP: { field: SearchField; aliases: string[]; example: strin
   { field: 'area', aliases: ['primaryArea'], example: 'area:optimization', means: 'primary area contains' },
   { field: 'venue', aliases: ['v', 'kind'], example: 'venue:iclr', means: 'venue contains' },
   { field: 'status', aliases: ['s'], example: 'status:settled', means: 'open, closed, settled or void' },
+  {
+    field: 'outcome',
+    aliases: ['o', 'decision'],
+    example: 'outcome:withdrawn',
+    means: 'withdrawn, desk_rejected, rejected, accepted (or oral, spotlight, poster), or pending',
+  },
   {
     field: 'accept',
     aliases: ['p', 'chance'],
@@ -107,6 +118,26 @@ export const FIELD_HELP: { field: SearchField; aliases: string[]; example: strin
 export const STATUS_VALUES = ['open', 'closed', 'settled', 'void'] as const;
 export type StatusValue = (typeof STATUS_VALUES)[number];
 
+/**
+ * What `outcome:` takes: a venue status (`lib/venue-status.ts`), `accepted` for any accepted tier, or
+ * `pending` for a paper still under review. Spellings below; the first of each is its own name.
+ */
+export const OUTCOME_VALUES = [...VENUE_STATUSES, 'pending'] as const;
+export type OutcomeValue = (typeof OUTCOME_VALUES)[number];
+const OUTCOME_ALIASES: Record<string, OutcomeValue> = {
+  ...Object.fromEntries(VENUE_STATUSES.map((v) => [v, v])),
+  desk: 'desk_rejected',
+  deskrejected: 'desk_rejected',
+  'desk-rejected': 'desk_rejected',
+  reject: 'rejected',
+  accept: 'accepted',
+  pending: 'pending',
+  review: 'pending',
+  under_review: 'pending',
+  'under-review': 'pending',
+  none: 'pending',
+};
+
 export type CompareOp = '=' | '!=' | '>' | '<' | '>=' | '<=';
 
 export type SearchNode =
@@ -121,6 +152,8 @@ export type SearchNode =
   /** A text field: contains (`=`) or does not (`!=`), case-insensitively. */
   | { kind: 'match'; field: (typeof TEXT_FIELDS)[number]; op: '=' | '!='; value: string }
   | { kind: 'status'; op: '=' | '!='; value: StatusValue }
+  /** The paper's outcome at its venue (`listings.venue_status`). */
+  | { kind: 'outcome'; op: '=' | '!='; value: OutcomeValue }
   /** What reviewers wrote contains `value` as a phrase, stemmed (`=`), or nothing does (`!=`). */
   | { kind: 'review'; op: '=' | '!='; value: string }
   /** `value` is a plain decimal string: a percentage, rep, a count, or a mean review score. */
@@ -273,6 +306,18 @@ function fieldNode(tok: Extract<Token, { t: 'field' }>, errors: string[]): Searc
     }
     return { kind: 'status', op, value: v as StatusValue };
   }
+  if (field === 'outcome') {
+    const v = OUTCOME_ALIASES[value.toLowerCase()];
+    if (v === undefined) {
+      errors.push(`“${tok.raw}”: outcome is ${OUTCOME_VALUES.join(', ')}`);
+      return null;
+    }
+    if (op !== '=' && op !== '!=') {
+      errors.push(`“${tok.raw}”: outcome takes : or !=`);
+      return null;
+    }
+    return { kind: 'outcome', op, value: v };
+  }
   const number = field === 'accept' ? value.replace(/%$/, '') : value;
   if (!NUMBER.test(number) || (field === 'trades' && number.includes('.'))) {
     errors.push(`“${tok.raw}”: ${field} takes ${field === 'trades' ? 'a whole number' : 'a number'}`);
@@ -419,6 +464,7 @@ export function parseSearch(input: string): ParsedSearch {
       if (n.kind === 'and' || n.kind === 'or') n.items.forEach(collect);
       else if (n.kind === 'not') collect(n.item);
       else if (n.kind === 'status') fields.add('status');
+      else if (n.kind === 'outcome') fields.add('outcome');
       else if (n.kind === 'review') fields.add('review');
       else if (n.kind === 'match' || n.kind === 'compare') fields.add(n.field);
     };

@@ -327,7 +327,7 @@ export function buildRegistry(): OpenAPIRegistry {
       tags: ['listings'],
       summary: 'Mark a listing withdrawn or desk-rejected',
       description:
-        'Sets `venueStatus`: the home list and the map leave the paper out unless asked, a search lists it apart, and it is labelled. Idempotent: `venueStatusAt` is kept while the status is the same. Its own call, so re-posting the listing keeps it.',
+        'Sets `venueStatus`, the paper’s outcome at its venue, labelled wherever it is shown. A withdrawn or desk-rejected paper is left out of the home list and the map unless asked, and a search lists it apart. Idempotent: `venueStatusAt` is kept while the status is the same. Its own call, so re-posting the listing keeps it.',
       scope: 'admin',
       request: {
         params: z.object({ id: S.ListingRef }),
@@ -343,7 +343,7 @@ export function buildRegistry(): OpenAPIRegistry {
       path: '/listings/{id}/venue-status',
       tags: ['listings'],
       summary: 'Clear a listing’s venue status',
-      description: 'Clears `venueStatus`, for a withdrawal that was reverted. Idempotent.',
+      description: 'Clears `venueStatus`, back to under review: for a withdrawal that was reverted. Idempotent.',
       scope: 'admin',
       request: { params: z.object({ id: S.ListingRef }) },
       ok: { status: 200, schema: S.SetVenueStatusResult, description: 'Cleared.' },

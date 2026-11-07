@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, ne, sql, type SQL } from 'drizzle-orm';
 import { getDb, type Database } from '@/db';
 import {
   accounts,
@@ -31,6 +31,7 @@ import { containsPattern, parseSearch, requiredText, websearchOf, type CompareOp
 import { isReviewFactor, REVIEW_FACTORS, roundMean, type ReviewFactor } from '@/lib/reviews';
 import { normalizeSearch, prefixTsquery } from '@/lib/search';
 import { cosineDistance } from '@/lib/vectors';
+import { ACCEPTED_STATUSES, isOut } from '@/lib/venue-status';
 import { ApiError } from './api/errors';
 import { standingsGeneration, standingsChangesSince } from './standings-cache';
 import { valuations } from './valuation';
@@ -43,6 +44,7 @@ import {
   sparklineReads,
   MARKET_READ_TTL_MS,
 } from './market-cache';
+import { listed, statusList } from './listed';
 import { mapCached } from './map-cache';
 import { recommendationScores, scoresTable } from './recommendations';
 
@@ -232,6 +234,14 @@ function searchPredicate(node: SearchNode, skip: SearchNode | null): SQL | null 
     }
     case 'status':
       return node.op === '=' ? rowStatusIs(node.value) : sql`not ${rowStatusIs(node.value)}`;
+    case 'outcome': {
+      // `l` is null for a market with no paper: pending, like a paper under review.
+      const is =
+        node.value === 'pending'
+          ? sql`l.venue_status is null`
+          : sql`coalesce(l.venue_status in (${statusList(node.value === 'accepted' ? ACCEPTED_STATUSES : [node.value])}), false)`;
+      return node.op === '=' ? is : sql`not ${is}`;
+    }
     case 'review': {
       const found = reviewsSay(node.value);
       return node.op === '=' ? found : sql`not ${found}`;
@@ -628,7 +638,7 @@ export async function listingRelatedTo(
       .select({ listing: listings })
       .from(listingRelated)
       .innerJoin(listings, eq(listings.slug, listingRelated.relatedSlug))
-      .where(and(eq(listingRelated.listingId, listing.id), isNull(listings.venueStatus)))
+      .where(and(eq(listingRelated.listingId, listing.id), listed(listings.venueStatus)))
       .orderBy(asc(listingRelated.position)),
     all
       ? [{ id: listing.id }]
@@ -719,7 +729,7 @@ function mapPointRows(kind: string, database: Database) {
  */
 export async function paperMap(kind: string, database: Database = getDb()): Promise<PaperMap> {
   const [rows, topics] = await Promise.all([
-    mapPointRows(kind, database).where(isNull(listings.venueStatus)).orderBy(asc(mapPoints.slug)),
+    mapPointRows(kind, database).where(listed(listings.venueStatus)).orderBy(asc(mapPoints.slug)),
     database
       .select()
       .from(mapTopics)
@@ -751,7 +761,7 @@ export async function mapTitles(kind: string, database: Database = getDb()): Pro
     .select({ slug: listings.slug, title: listings.title })
     .from(mapPoints)
     .innerJoin(listings, eq(listings.slug, mapPoints.slug))
-    .where(and(eq(mapPoints.kind, kind), isNull(listings.venueStatus)));
+    .where(and(eq(mapPoints.kind, kind), listed(listings.venueStatus)));
   return Object.fromEntries(rows.map((r) => [r.slug, r.title]));
 }
 
@@ -770,7 +780,7 @@ export async function mapScores(kind: string, database: Database = getDb()): Pro
       from map_points p
       join listings l on l.slug = p.slug
       join listing_reviews r on r.listing_id = l.id and r.kind = 'review'
-     where p.kind = ${kind} and l.venue_status is null
+     where p.kind = ${kind} and ${listed(sql`l.venue_status`)}
      group by l.slug
      order by l.slug
   `);
@@ -839,7 +849,7 @@ export async function listingMinimap(
       .select({ slug: mapPoints.slug, vector: mapPoints.vector })
       .from(mapPoints)
       .innerJoin(listings, eq(listings.slug, mapPoints.slug))
-      .where(and(eq(mapPoints.kind, kind), ne(mapPoints.slug, listing.slug), isNull(listings.venueStatus)))
+      .where(and(eq(mapPoints.kind, kind), ne(mapPoints.slug, listing.slug), listed(listings.venueStatus)))
       .orderBy(d2)
       .limit(centre.vector ? MINIMAP_CANDIDATES : MINIMAP_NEAREST),
     database
@@ -911,7 +921,7 @@ export async function listingVenue(listing: Listing, database: Database = getDb(
  * the caller already has it. A withdrawn or desk-rejected paper is not: the map leaves it out.
  */
 export async function onMap(listing: Listing, venue?: string | null, database: Database = getDb()): Promise<boolean> {
-  if (listing.venueStatus) return false;
+  if (isOut(listing.venueStatus)) return false;
   const kind = venue === undefined ? await listingVenue(listing, database) : venue;
   if (kind === null) return false;
   const [row] = await database
@@ -957,7 +967,7 @@ export async function mapRelated(kind: string, database: Database = getDb()): Pr
       join map_points a on a.kind = ${kind} and a.slug = l.slug
       join map_points b on b.kind = ${kind} and b.slug = lr.related_slug
       join listings lb on lb.slug = lr.related_slug
-     where lr.position < ${MAP_RELATED_DEPTH} and l.venue_status is null and lb.venue_status is null
+     where lr.position < ${MAP_RELATED_DEPTH} and ${listed(sql`l.venue_status`)} and ${listed(sql`lb.venue_status`)}
      order by l.slug, lr.position
   `);
   return result.rows;
@@ -1842,8 +1852,8 @@ function browseQuery(q: BrowseFilter): { from: SQL; order: SQL[]; searching: boo
     q.exceptFollowedBy ? sql`not ${followed(q.exceptFollowedBy)}` : undefined,
     q.exceptHeldBy ? sql`not ${held(q.exceptHeldBy)}` : undefined,
     // `l` is null on a standalone market's row, and that counts as still in review.
-    q.out === 'hide' ? sql`l.venue_status is null` : undefined,
-    q.out === 'only' ? sql`l.venue_status is not null` : undefined,
+    q.out === 'hide' ? listed(sql`l.venue_status`) : undefined,
+    q.out === 'only' ? sql`not ${listed(sql`l.venue_status`)}` : undefined,
     predicate ?? undefined,
   ].filter((w): w is SQL => w !== undefined);
 

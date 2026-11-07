@@ -29,7 +29,7 @@ import { currentVenue } from '@/server/current-venue';
 import * as events from '@/server/events';
 import { followedListingIds } from '@/server/follows';
 import { runningHead } from '@/venues';
-import { venueStatusLabel, venueStatusLine } from '@/lib/venue-status';
+import { isOut, venueStatusLabel, venueStatusLine } from '@/lib/venue-status';
 import { shareSubject, siteName, siteUrl } from '@/server/share';
 import { listingCitations, listingRelatedTo, listingView, onMap, resolveListing } from '@/server/views';
 
@@ -148,7 +148,7 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
         abstract={listing.summary}
         abstractMath
       >
-        {listing.venueStatus && (
+        {listing.venueStatus && isOut(listing.venueStatus) && (
           <p className="mb-2 font-sans text-[13px] text-down">
             {listing.kind ? venueStatusLine(listing.venueStatus, listing.kind) : venueStatusLabel(listing.venueStatus)},
             so left out of the paper lists and the map.

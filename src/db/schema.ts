@@ -20,7 +20,7 @@ import {
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import type { VenueStatus } from '@/lib/venue-status';
+import { VENUE_STATUSES, type VenueStatus } from '@/lib/venue-status';
 import { user } from './auth-schema';
 
 /**
@@ -205,9 +205,9 @@ export const listings = pgTable(
      */
     closedAt: timestamp('closed_at', { withTimezone: true, mode: 'date' }),
     /**
-     * `withdrawn` or `desk_rejected` (`lib/venue-status.ts`) once the creating
-     * client marks the paper out of its venue's review, else null; and since
-     * when. The lists and the map leave such a paper out unless asked
+     * The paper's outcome at its venue (`lib/venue-status.ts`) once the
+     * creating client marks one, else null (under review); and since when.
+     * The lists and the map leave a withdrawn or desk-rejected paper out unless asked
      * (`views.browseListings`), and it is labelled wherever it is shown. Set
      * only by `listings.setVenueStatus` (`PUT`/`DELETE
      * /listings/{id}/venue-status`), never by the upsert, so re-posting a
@@ -236,7 +236,7 @@ export const listings = pgTable(
     // fresh, which view counting dirties, so drizzle/0042 also vacuums the
     // table far more often than autovacuum's default.
     index('listings_kind_id_idx').on(t.kind, t.id),
-    check('listings_venue_status_check', sql`${t.venueStatus} in ('withdrawn', 'desk_rejected')`),
+    check('listings_venue_status_check', sql`${t.venueStatus} in (${sql.raw(VENUE_STATUSES.map((v) => `'${v}'`).join(', '))})`),
     check('listings_venue_status_at_check', sql`(${t.venueStatus} is null) = (${t.venueStatusAt} is null)`),
   ],
 );

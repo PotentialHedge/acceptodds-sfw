@@ -3,7 +3,15 @@ import { MathText } from '@/components/MathText';
 import { venueStatusLabel, type VenueStatus } from '@/lib/venue-status';
 
 /** Each status its own colour, so the two read apart at a glance. */
-const STATUS_COLOUR: Record<VenueStatus, string> = { withdrawn: 'text-down', desk_rejected: 'text-subtle' };
+const STATUS_COLOUR: Record<VenueStatus, string> = {
+  withdrawn: 'text-down',
+  desk_rejected: 'text-subtle',
+  rejected: 'text-subtle',
+  accepted: 'text-up',
+  poster: 'text-up',
+  spotlight: 'text-up',
+  oral: 'text-up',
+};
 
 type RowMarket = {
   question: string;
@@ -37,7 +45,7 @@ export function PaperRow({
   /** The mean review rating, on the venue's scale, at the row's right; nothing when null. */
   rating?: number | null;
   ratingCount?: number;
-  /** Labelled as withdrawn or desk-rejected. */
+  /** Its outcome at the venue, as a label: withdrawn, desk rejected, accepted…. */
   venueStatus?: VenueStatus | null;
   /** Accepted from the market edition's callers and never drawn: no prices in the safe for work edition. */
   market?: RowMarket | null;

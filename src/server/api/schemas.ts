@@ -190,7 +190,7 @@ const ListingFields = {
   }),
   venueStatus: z.enum(VENUE_STATUSES).nullable().meta({
     description:
-      "Set when the paper left its venue's review early (`PUT /listings/{id}/venue-status`): lists and the map leave it out unless asked. Else `null`.",
+      "The paper's outcome at its venue (`PUT /listings/{id}/venue-status`); `null` while under review. Lists and the map leave a `withdrawn` or `desk_rejected` paper out unless asked. Search it with `outcome:`.",
   }),
   venueStatusAt: Timestamp.nullable().meta({ description: 'Since when `venueStatus` has been what it is.' }),
   createdAt: Timestamp,
@@ -1240,7 +1240,10 @@ export const SetClosedResult = z
 
 export const SetVenueStatusRequest = z
   .object({
-    status: z.enum(VENUE_STATUSES).meta({ description: 'Withdrawn by its authors, or desk-rejected by the venue.' }),
+    status: z.enum(VENUE_STATUSES).meta({
+      description:
+        'Withdrawn by its authors or desk-rejected by the venue (both hidden from lists and the map), or the decision: rejected, or accepted at a tier (`poster`, `spotlight`, `oral`; `accepted` when none is named).',
+    }),
   })
   .meta({ id: 'SetVenueStatusRequest' });
 

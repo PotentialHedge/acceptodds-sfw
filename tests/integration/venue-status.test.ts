@@ -30,7 +30,7 @@ describe('PUT and DELETE /listings/{id}/venue-status', () => {
     const put = (status: string, token = admin.token) => api('PUT', path, { token, body: { status } });
 
     expect((await put('withdrawn', reader.token)).status).toBe(403);
-    expect((await put('rejected')).status).toBe(400);
+    expect((await put('maybe')).status).toBe(400);
     const first = await put('withdrawn');
     expect(first.status).toBe(200);
     const at = (first.body as any).venueStatusAt;
@@ -78,5 +78,41 @@ describe('browsing around withdrawn and desk-rejected papers', () => {
     expect((await listingRelatedTo(await resolveListing('kept'))).related).toEqual([]);
     expect(await sitemapPaths()).toEqual(['/papers/kept']);
     expect((await api('GET', '/listings/gone')).status).toBe(200);
+  });
+});
+
+describe('outcome: in a search', () => {
+  it('filters on each outcome and its groups, and decided papers stay listed', async () => {
+    await paper('review', 'Graph networks');
+    await setVenueStatus(await paper('gone', 'Graph sparsification'), 'withdrawn');
+    await setVenueStatus(await paper('desk', 'Graph pooling'), 'desk_rejected');
+    await setVenueStatus(await paper('oral', 'Graph transformers'), 'oral');
+    await setVenueStatus(await paper('poster', 'Graph kernels'), 'poster');
+    await setVenueStatus(await paper('no', 'Graph rewiring'), 'rejected');
+    const base = { sort: 'newest', status: 'all', kind: 'ICLR 2027' } as const;
+    const search = (q: string) => slugs({ ...base, q, out: 'include' });
+
+    // Hidden by default: only the two out of review early.
+    expect(await slugs({ ...base, out: 'hide' })).toEqual(['no', 'oral', 'poster', 'review']);
+    expect(await slugs({ ...base, out: 'only' })).toEqual(['desk', 'gone']);
+
+    expect(await search('outcome:withdrawn')).toEqual(['gone']);
+    expect(await search('outcome:desk')).toEqual(['desk']);
+    expect(await search('outcome:accepted')).toEqual(['oral', 'poster']);
+    expect(await search('outcome:oral')).toEqual(['oral']);
+    expect(await search('outcome:rejected')).toEqual(['no']);
+    expect(await search('outcome:pending')).toEqual(['review']);
+    expect(await search('graph (outcome:withdrawn OR outcome:desk)')).toEqual(['desk', 'gone']);
+    expect(await search('-outcome:accepted')).toEqual(['desk', 'gone', 'no', 'review']);
+    expect(await search('outcome!=pending')).toEqual(['desk', 'gone', 'no', 'oral', 'poster']);
+  });
+
+  it('leaves a decided paper on the map and in related lists', async () => {
+    const kept = await paper('kept', 'Graph networks');
+    const oral = await paper('oral', 'Graph transformers');
+    await setRelated(kept, [{ slug: 'oral', score: 0.9 }]);
+    await setVenueStatus(oral, 'oral');
+    expect((await listingRelatedTo(await resolveListing('kept'))).related.map((r) => r.listing.slug)).toEqual(['oral']);
+    expect((await sitemapPaths()).sort()).toEqual(['/papers/kept', '/papers/oral']);
   });
 });

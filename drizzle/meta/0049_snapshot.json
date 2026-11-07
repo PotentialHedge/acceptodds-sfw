@@ -1,5 +1,5 @@
 {
-  "id": "b7a26d44-42df-4fc3-8874-4f9268e968c7",
+  "id": "923f8743-f674-4c12-a759-8c5b29e6dce7",
   "prevId": "fca66109-d134-41b7-b185-ecc294e20bd7",
   "version": "7",
   "dialect": "postgresql",
@@ -2679,7 +2679,7 @@
       "checkConstraints": {
         "listings_venue_status_check": {
           "name": "listings_venue_status_check",
-          "value": "\"listings\".\"venue_status\" in ('withdrawn', 'desk_rejected')"
+          "value": "\"listings\".\"venue_status\" in ('withdrawn', 'desk_rejected', 'rejected', 'accepted', 'poster', 'spotlight', 'oral')"
         },
         "listings_venue_status_at_check": {
           "name": "listings_venue_status_at_check",

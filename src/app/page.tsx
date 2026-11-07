@@ -184,7 +184,9 @@ export default async function Home({
   // Withdrawn and desk-rejected papers are left out of the list. ?out=1 puts them back in it, labelled; a
   // search without it lists those it finds apart, under its results. Papers the viewer follows stay, labelled.
   const showOut = one(sp.out) === '1';
-  const inList = showOut || onlyFollowed;
+  // An `outcome:` in the query says which papers it wants, withdrawn ones too: they are listed with the rest.
+  const asksOutcome = parsed?.fields.has('outcome') ?? false;
+  const inList = showOut || onlyFollowed || asksOutcome;
   // Papers the viewer follows are pinned above the list: same venue and sort,
   // paged on their own, and not repeated. Not while searching, nor when the
   // list is already only followed papers.

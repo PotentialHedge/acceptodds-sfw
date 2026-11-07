@@ -238,3 +238,28 @@ describe('reading the tree', () => {
     expect(containsPattern('50%_off\\')).toBe('%50\\%\\_off\\\\%');
   });
 });
+
+describe('outcome:', () => {
+  it('takes each venue status, its spellings, and pending', () => {
+    const value = (q: string) => (parseSearch(q).node as Extract<SearchNode, { kind: 'outcome' }>).value;
+    expect(value('outcome:withdrawn')).toBe('withdrawn');
+    expect(value('outcome:Desk')).toBe('desk_rejected');
+    expect(value('decision:desk-rejected')).toBe('desk_rejected');
+    expect(value('o:accept')).toBe('accepted');
+    expect(value('outcome:oral')).toBe('oral');
+    expect(value('outcome:under_review')).toBe('pending');
+    expect(parseSearch('outcome:withdrawn').fields.has('outcome')).toBe(true);
+  });
+
+  it('negates, and drops a bad value or operator with an error', () => {
+    expect(parseSearch('-outcome:withdrawn').node).toEqual({
+      kind: 'not',
+      item: { kind: 'outcome', op: '=', value: 'withdrawn' },
+    });
+    expect(parseSearch('outcome!=rejected').node).toEqual({ kind: 'outcome', op: '!=', value: 'rejected' });
+    const bad = parseSearch('graph outcome:maybe outcome>oral');
+    expect(bad.node).toEqual(text(['graph']));
+    expect(bad.errors).toHaveLength(2);
+    expect(bad.fields.has('outcome')).toBe(false);
+  });
+});
