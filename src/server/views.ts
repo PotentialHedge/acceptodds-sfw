@@ -1677,8 +1677,10 @@ async function readBrowsePage(
   // The total is its own query, not `count(*) over ()`: a window makes every
   // row of the venue, not just the page's, go through the select list (its
   // casts to text) and into a tuplestore — 4x the page query's time (#12).
-  const [result, total] = await withSearchPlan(searching, database, (ex) =>
-    Promise.all([
+  // Each in a transaction of its own, so they run at once: one transaction is
+  // one connection, and its queries wait for each other.
+  const [result, total] = await Promise.all([
+    withSearchPlan(searching, database, (ex) =>
       ex.execute<{
         listing_id: string | null;
         market_id: string | null;
@@ -1696,9 +1698,15 @@ async function readBrowsePage(
        order by ${sql.join([...order, sql`coalesce(m.id, l.id) desc`], sql`, `)}
        limit ${limit} offset ${offset}
     `),
-      shareCount(async () => (await ex.execute<{ n: number }>(sql`select count(*)::int as n ${from}`)).rows[0]?.n ?? 0),
-    ]),
-  );
+    ),
+    shareCount(() =>
+      withSearchPlan(
+        searching,
+        database,
+        async (ex) => (await ex.execute<{ n: number }>(sql`select count(*)::int as n ${from}`)).rows[0]?.n ?? 0,
+      ),
+    ),
+  ]);
 
   const found = result.rows;
   // Past the end, or nothing at all: the page is empty, the total is not.
@@ -1808,6 +1816,13 @@ type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
  * loop, and a search for "ads" took 50 s against the 15 s statement timeout;
  * with this, 1.5 s, the same as a venue with markets. Rewriting the filter
  * (`rowKindIs`) only moves the bad guess, as the coalesce form did (#12).
+ *
+ * And with `random_page_cost` at 1.1, as for an SSD, from Postgres' 4. The
+ * planner does not count reading each row's TOASTed `search_vector`, so for a
+ * common word it took a seq scan of every listing over the GIN index:
+ * "diffusion" (4.7k of 52k papers) read 165k buffers and took 0.9 s to find its
+ * hits, against 45 ms by the index, and the whole count went from 1.05 s to
+ * 0.25 s.
  */
 async function withSearchPlan<T>(
   searching: boolean,
@@ -1817,9 +1832,11 @@ async function withSearchPlan<T>(
   if (!searching) return read(database);
   return database.transaction(async (tx) => {
     await tx.execute(sql`set local enable_nestloop = off`);
+    await tx.execute(sql`set local random_page_cost = 1.1`);
     const out = await read(tx);
     // Inside a caller's transaction this is a savepoint, and `set local` would outlive it.
     await tx.execute(sql`set local enable_nestloop to default`);
+    await tx.execute(sql`set local random_page_cost to default`);
     return out;
   });
 }
