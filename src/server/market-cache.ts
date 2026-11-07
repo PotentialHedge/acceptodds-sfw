@@ -20,15 +20,15 @@ export const BROWSE_READ_TTL_MS = 30_000;
 const BROWSE_STALE_AFTER_WRITE_MS = Number(process.env.BROWSE_STALE_AFTER_WRITE_MS ?? 5_000);
 
 /**
- * The home page's example searches (`views.browseListings`), refreshed in the background
- * (`example-warmer.ts`) so they are fast for everyone, the first visitor included.
+ * The home page's default list and its example searches (`views.browseListings`), refreshed in the
+ * background (`home-warmer.ts`) so they are fast for everyone, the first visitor included.
  */
 // One per process, on `globalThis`: `instrumentation.ts`, which starts the warmer, is bundled apart from
 // the pages, and a module-level cache would be two (as `db/index.ts`'s pool).
 declare global {
-  var __papermarketExampleReads: WarmCache | undefined;
+  var __papermarketWarmReads: WarmCache | undefined;
 }
-export const exampleReads = (globalThis.__papermarketExampleReads ??= new WarmCache(100, 5 * 60_000));
+export const warmReads = (globalThis.__papermarketWarmReads ??= new WarmCache(100, 5 * 60_000));
 
 /** `views.traderInstitutions`: every account scanned, for the board picker and the home page's strip. */
 export const institutionReads = new ReadCache(1);
@@ -46,14 +46,14 @@ export function invalidateMarketReads(marketId: string): void {
 export function invalidateBrowseReads(): void {
   browseReads.clear();
   // The tests' setting: a write is seen at once, so a warm example is dropped too.
-  if (BROWSE_STALE_AFTER_WRITE_MS <= 0) exampleReads.clear();
-  else exampleReads.written();
+  if (BROWSE_STALE_AFTER_WRITE_MS <= 0) warmReads.clear();
+  else warmReads.written();
 }
 
 export function clearMarketReads(): void {
   marketReads.clear();
   sparklineReads.clear();
   browseReads.clear();
-  exampleReads.clear();
+  warmReads.clear();
   institutionReads.clear();
 }

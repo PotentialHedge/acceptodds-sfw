@@ -38,7 +38,7 @@ import { standingsGeneration, standingsChangesSince } from './standings-cache';
 import { valuations } from './valuation';
 import {
   browseReads,
-  exampleReads,
+  warmReads,
   BROWSE_READ_TTL_MS,
   institutionReads,
   INSTITUTION_READ_TTL_MS,
@@ -1651,8 +1651,11 @@ export async function browseListings(
   if (personal || database !== getDb()) return readBrowsePage(q, database);
   const out = q.out ?? 'include';
   const key = browseKey(q);
-  // An example search the home page offers: kept warm, so never waited on (`example-warmer.ts`).
-  if (exampleOf(q.q)) return exampleReads.get(`page:${key}`, () => readBrowsePage(q, database));
+  // The home page's default list and the example searches it offers: kept warm, so never waited on
+  // (`home-warmer.ts`). Another read of an example is cached alongside them.
+  if (warmReads.isWarm(`page:${key}`) || exampleOf(q.q)) {
+    return warmReads.get(`page:${key}`, () => readBrowsePage(q, database));
+  }
   // The total depends on the filters alone: one count for every sort and page of them.
   const countKey = JSON.stringify([q.kind ?? null, q.status ?? null, q.q ?? null, !!q.traded, out]);
   const shareCount = (count: () => Promise<number>) => browseReads.get(`count:${countKey}`, BROWSE_READ_TTL_MS, count);
@@ -1678,17 +1681,20 @@ export const HOME_PAGE_SIZE = 50;
 export const OUT_PAGE_SIZE = 10;
 
 /**
- * Computes the home page's first page of each example search afresh, as the page reads it for a search
- * in `kind` (its results, and the withdrawn and desk-rejected apart), one read at a time.
+ * Computes afresh, one read at a time, what the home page reads first in `kind` for a visitor who is not
+ * signed in: its list, in its default sort, and the first page of each example search (its results, and
+ * the withdrawn and desk-rejected apart). The list took 1.2 s each time its 30 s cache ran out.
  */
-export async function warmExampleSearches(kind: string): Promise<void> {
+export async function warmHomeReads(kind: string): Promise<void> {
+  const home = { kind, status: 'all', sort: 'rating', offset: 0, limit: HOME_PAGE_SIZE, out: 'hide' } as const;
+  await warmReads.refresh(`page:${browseKey(home)}`, () => readBrowsePage(home, getDb()));
   for (const example of SEARCH_EXAMPLES) {
     for (const [out, limit] of [
       ['hide', HOME_PAGE_SIZE],
       ['only', OUT_PAGE_SIZE],
     ] as const) {
       const q = { kind, status: 'all', sort: 'relevance', q: example.q, offset: 0, limit, out } as const;
-      await exampleReads.refresh(`page:${browseKey(q)}`, () => readBrowsePage(q, getDb()));
+      await warmReads.refresh(`page:${browseKey(q)}`, () => readBrowsePage(q, getDb()));
     }
   }
 }

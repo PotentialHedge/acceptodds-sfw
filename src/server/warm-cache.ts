@@ -1,6 +1,6 @@
 /**
- * Reads kept warm by a background refresh, so nobody waits on them: the home page's example searches
- * (`lib/search-examples.ts`), which visitors are invited to click. Unlike `ReadCache`, a warm entry is
+ * Reads kept warm by a background refresh, so nobody waits on them: the home page's default list and
+ * its example searches (`lib/search-examples.ts`), which visitors are invited to click. Unlike `ReadCache`, a warm entry is
  * never dropped to be recomputed by a visitor: `refresh` swaps the new value in once it is ready, and the
  * old one is served meanwhile. An entry nobody warms (an example on another venue, or page 2) is an
  * ordinary cached read, `maxAgeMs` long, dropped by a write.
@@ -24,6 +24,11 @@ export class WarmCache {
       if (this.entries.get(key) === entry) this.entries.delete(key);
     });
     return entry.value;
+  }
+
+  /** Whether `key` is one the warmer keeps. */
+  isWarm(key: string): boolean {
+    return this.entries.get(key)?.warm ?? false;
   }
 
   /** Computes `key` afresh and serves it from then on, warm. On an error the old value stays. */
