@@ -361,80 +361,81 @@ export default async function Home({
           </PopoverContent>
         </Popover>
       </form>
-      {!q && (
-        <div className="mt-1.5 font-sans text-[13px] text-muted">
-          Try <ExampleLink id={linkExample.id} q={linkExample.q} href={href({ q: linkExample.q, sort: 'relevance' })} />
-        </div>
-      )}
-
       {parsed && parsed.errors.length > 0 && (
         <div className="mt-2 font-sans text-[13px] text-down">Ignored: {parsed.errors.join('; ')}</div>
       )}
 
-      {q && (
-        <div className="mt-2 font-sans text-[13px] text-muted">
-          {all.total.toLocaleString('en')} {all.total === 1 ? 'result' : 'results'} for “{q}”
-          {filtered && <> in {kindFilter ?? 'all venues'}.</>}
-          {outCount > 0 && (
-            <>
-              {' '}
-              <a href="#out">{outCount.toLocaleString('en')} withdrawn or desk rejected</a> listed apart.
-            </>
-          )}{' '}
-          <Link href={href({ q: '' })}>clear</Link>
-        </div>
-      )}
-
-      <div className="mt-2 mb-1 flex flex-wrap items-baseline gap-x-4.5 gap-y-1.5 font-sans text-[13px] text-muted narrow:hidden">
-        <span className="flex-1" />
-        <span className="flex flex-wrap gap-x-3 gap-y-1">
-          sort:
-          {sorts
-            .filter((s) => !MENU_SORTS.includes(s))
-            .map((s) => (
-              <SortLink key={s} pinned={pinnedCount > 0} href={href({ sort: s })} className={s === sort ? ON : ''}>
-                {sortLabel(s)}
-              </SortLink>
-            ))}
-        </span>
-        {/* The rarer sorts, status and following, out of the way. */}
-        <Popover>
-          {/* Not a flex box: an icon alone gives a flex item no text baseline, and the row aligns on
-              baselines. Inline, `align-middle` centres the dots on the text's x-height. */}
-          <PopoverTrigger
-            title="More filters: following, TLDRs, withdrawn and desk rejected"
-            className="-my-1 cursor-pointer px-1 py-1 text-ink hover:text-accent"
-          >
-            {moreLabel}
-            <MoreIcon className={`inline-block size-5 align-middle ${moreLabel ? 'ml-1' : ''}`} />
-          </PopoverTrigger>
-          <PopoverContent menu align="end" className="text-[13px]">
-            {MENU_SORTS.map((s) => (
-              <PopoverClose key={s} asChild>
-                <SortLink pinned={pinnedCount > 0} href={href({ sort: s })} className={s === sort ? ON : ''}>
-                  sort: {sortLabel(s)}
+      {/* One row: an example to try, or what the search found, on the left; sorting on the right, under it
+          only when the two do not fit side by side. On a phone the sorts are in the filter menu. */}
+      <div className="mt-1.5 mb-1 flex flex-wrap items-baseline gap-x-4.5 gap-y-1.5 font-sans text-[13px] text-muted">
+        {q ? (
+          <span>
+            {all.total.toLocaleString('en')} {all.total === 1 ? 'result' : 'results'} for “{q}”
+            {filtered && <> in {kindFilter ?? 'all venues'}.</>}
+            {outCount > 0 && (
+              <>
+                {' '}
+                <a href="#out">{outCount.toLocaleString('en')} withdrawn or desk rejected</a> listed apart.
+              </>
+            )}{' '}
+            <Link href={href({ q: '' })}>clear</Link>
+          </span>
+        ) : (
+          <span>
+            Try{' '}
+            <ExampleLink id={linkExample.id} q={linkExample.q} href={href({ q: linkExample.q, sort: 'relevance' })} />
+          </span>
+        )}
+        <span className="ml-auto flex flex-wrap items-baseline gap-x-4.5 gap-y-1.5 narrow:hidden">
+          <span className="flex flex-wrap gap-x-3 gap-y-1">
+            sort:
+            {sorts
+              .filter((s) => !MENU_SORTS.includes(s))
+              .map((s) => (
+                <SortLink key={s} pinned={pinnedCount > 0} href={href({ sort: s })} className={s === sort ? ON : ''}>
+                  {sortLabel(s)}
                 </SortLink>
-              </PopoverClose>
-            ))}
-            {viewer && (
+              ))}
+          </span>
+          {/* The rarer sorts, status and following, out of the way. */}
+          <Popover>
+            {/* Not a flex box: an icon alone gives a flex item no text baseline, and the row aligns on
+              baselines. Inline, `align-middle` centres the dots on the text's x-height. */}
+            <PopoverTrigger
+              title="More filters: following, TLDRs, withdrawn and desk rejected"
+              className="-my-1 cursor-pointer px-1 py-1 text-ink hover:text-accent"
+            >
+              {moreLabel}
+              <MoreIcon className={`inline-block size-5 align-middle ${moreLabel ? 'ml-1' : ''}`} />
+            </PopoverTrigger>
+            <PopoverContent menu align="end" className="text-[13px]">
+              {MENU_SORTS.map((s) => (
+                <PopoverClose key={s} asChild>
+                  <SortLink pinned={pinnedCount > 0} href={href({ sort: s })} className={s === sort ? ON : ''}>
+                    sort: {sortLabel(s)}
+                  </SortLink>
+                </PopoverClose>
+              ))}
+              {viewer && (
+                <PopoverClose asChild>
+                  <Link href={href({ following: onlyFollowed ? '0' : '1' })} className={onlyFollowed ? ON : ''}>
+                    ★ following
+                  </Link>
+                </PopoverClose>
+              )}
               <PopoverClose asChild>
-                <Link href={href({ following: onlyFollowed ? '0' : '1' })} className={onlyFollowed ? ON : ''}>
-                  ★ following
+                <Link href={href({ tldr: showTldr ? '0' : '1' })} className={showTldr ? ON : ''}>
+                  show TLDRs
                 </Link>
               </PopoverClose>
-            )}
-            <PopoverClose asChild>
-              <Link href={href({ tldr: showTldr ? '0' : '1' })} className={showTldr ? ON : ''}>
-                show TLDRs
-              </Link>
-            </PopoverClose>
-            <PopoverClose asChild>
-              <Link href={href({ out: showOut ? '0' : '1' })} className={showOut ? ON : ''}>
-                show withdrawn & desk rejected
-              </Link>
-            </PopoverClose>
-          </PopoverContent>
-        </Popover>
+              <PopoverClose asChild>
+                <Link href={href({ out: showOut ? '0' : '1' })} className={showOut ? ON : ''}>
+                  show withdrawn & desk rejected
+                </Link>
+              </PopoverClose>
+            </PopoverContent>
+          </Popover>
+        </span>
       </div>
 
       {all.total + pinnedCount + outCount === 0 &&
