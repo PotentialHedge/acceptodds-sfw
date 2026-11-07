@@ -1,4 +1,5 @@
 import { REVIEW_COHORTS } from '@/lib/reviews';
+import { VENUE_STATUSES } from '@/lib/venue-status';
 import { z } from 'zod';
 import { SEARCH_MAX_LENGTH } from '@/lib/search';
 import { TOKEN_SCOPES } from '../tokens';
@@ -187,9 +188,11 @@ const ListingFields = {
   closedAt: Timestamp.nullable().meta({
     description: 'When the creating client closed it (`PUT /listings/{id}/closed`), else `null`.',
   }),
-  withdrawnAt: Timestamp.nullable().meta({
-    description: 'When it was marked withdrawn from its venue (`PUT /listings/{id}/withdrawn`), else `null`.',
+  venueStatus: z.enum(VENUE_STATUSES).nullable().meta({
+    description:
+      "Set when the paper left its venue's review early (`PUT /listings/{id}/venue-status`): lists and the map leave it out unless asked. Else `null`.",
   }),
+  venueStatusAt: Timestamp.nullable().meta({ description: 'Since when `venueStatus` has been what it is.' }),
   createdAt: Timestamp,
 };
 
@@ -1235,14 +1238,19 @@ export const SetClosedResult = z
   })
   .meta({ id: 'SetClosedResult' });
 
-export const SetWithdrawnResult = z
+export const SetVenueStatusRequest = z
+  .object({
+    status: z.enum(VENUE_STATUSES).meta({ description: 'Withdrawn by its authors, or desk-rejected by the venue.' }),
+  })
+  .meta({ id: 'SetVenueStatusRequest' });
+
+export const SetVenueStatusResult = z
   .object({
     listingId: Id,
-    withdrawnAt: Timestamp.nullable().meta({
-      description: 'When it was first marked; `null` once it is not any more.',
-    }),
+    venueStatus: z.enum(VENUE_STATUSES).nullable(),
+    venueStatusAt: Timestamp.nullable().meta({ description: 'Since when; `null` once cleared.' }),
   })
-  .meta({ id: 'SetWithdrawnResult' });
+  .meta({ id: 'SetVenueStatusResult' });
 
 export const SetTextResult = z.object({ listingId: Id, chars: z.number().int().min(0) }).meta({ id: 'SetTextResult' });
 

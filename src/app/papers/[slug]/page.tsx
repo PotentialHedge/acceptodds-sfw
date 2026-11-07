@@ -29,6 +29,7 @@ import { currentVenue } from '@/server/current-venue';
 import * as events from '@/server/events';
 import { followedListingIds } from '@/server/follows';
 import { runningHead } from '@/venues';
+import { venueStatusLabel, venueStatusLine } from '@/lib/venue-status';
 import { shareSubject, siteName, siteUrl } from '@/server/share';
 import { listingCitations, listingRelatedTo, listingView, onMap, resolveListing } from '@/server/views';
 
@@ -137,7 +138,9 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
       {/* The paper's venue becomes the navbar's. */}
       {venueOf && <RememberVenue kind={venueOf} stale={venueOf !== (await currentVenue())} />}
       {listing.kind && (
-        <RunningHead>{listing.withdrawnAt ? `Withdrawn from ${listing.kind}` : runningHead(listing.kind)}</RunningHead>
+        <RunningHead>
+          {listing.venueStatus ? venueStatusLine(listing.venueStatus, listing.kind) : runningHead(listing.kind)}
+        </RunningHead>
       )}
       <TitleBlock
         title={<MathText text={listing.title} />}
@@ -145,9 +148,10 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
         abstract={listing.summary}
         abstractMath
       >
-        {listing.withdrawnAt && (
+        {listing.venueStatus && (
           <p className="mb-2 font-sans text-[13px] text-down">
-            Withdrawn{listing.kind ? ` from ${listing.kind}` : ''}, so left out of the paper lists and the map.
+            {listing.kind ? venueStatusLine(listing.venueStatus, listing.kind) : venueStatusLabel(listing.venueStatus)},
+            so left out of the paper lists and the map.
           </p>
         )}
         {listing.links.length > 0 && (

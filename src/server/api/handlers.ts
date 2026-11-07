@@ -34,7 +34,7 @@ import {
   rotateInvite,
   updateGroup,
 } from '../groups';
-import { setClosed, setRelated, setText, setWithdrawn, upsertListing } from '../listings';
+import { setClosed, setRelated, setText, setVenueStatus, upsertListing } from '../listings';
 import { setMap } from '../map';
 import { currentAnnouncements, deleteAnnouncement as deleteAnnouncementRow, postAnnouncement } from '../announcements';
 import { mapCached } from '../map-cache';
@@ -320,15 +320,29 @@ async function setListingClosed(req: Request, id: string | string[] | undefined,
   return respond(S.SetClosedResult, { listingId: listing.id, closedAt: toIsoOrNull(closedAt) }, { principal });
 }
 
-/** Mark a listing withdrawn from its venue (`PUT`), or not any more (`DELETE`). Idempotent. */
-export const putListingWithdrawn = route(async (req, params) => setListingWithdrawn(req, params.id, true));
-export const deleteListingWithdrawn = route(async (req, params) => setListingWithdrawn(req, params.id, false));
-
-async function setListingWithdrawn(req: Request, id: string | string[] | undefined, withdrawn: boolean) {
+/** Mark a listing withdrawn or desk-rejected (`PUT`), or neither any more (`DELETE`). Idempotent. */
+export const putListingVenueStatus = route(async (req, params) => {
   const principal = await requireAuth(req, 'admin');
-  const listing = await resolveListing(parseParam(id, S.ListingRef, 'id'));
-  const withdrawnAt = await setWithdrawn(listing, withdrawn);
-  return respond(S.SetWithdrawnResult, { listingId: listing.id, withdrawnAt: toIsoOrNull(withdrawnAt) }, { principal });
+  const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
+  const body = await parseBody(req, S.SetVenueStatusRequest);
+  return venueStatusResult(listing.id, await setVenueStatus(listing, body.status), principal);
+});
+export const deleteListingVenueStatus = route(async (req, params) => {
+  const principal = await requireAuth(req, 'admin');
+  const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
+  return venueStatusResult(listing.id, await setVenueStatus(listing, null), principal);
+});
+
+function venueStatusResult(
+  listingId: string,
+  r: Awaited<ReturnType<typeof setVenueStatus>>,
+  principal: Awaited<ReturnType<typeof requireAuth>>,
+) {
+  return respond(
+    S.SetVenueStatusResult,
+    { listingId, venueStatus: r.venueStatus, venueStatusAt: toIsoOrNull(r.venueStatusAt) },
+    { principal },
+  );
 }
 
 /** Replace a listing's related list. Written by `listings.ts`; not market state. */

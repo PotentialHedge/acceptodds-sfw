@@ -20,6 +20,7 @@ import {
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
+import type { VenueStatus } from '@/lib/venue-status';
 import { user } from './auth-schema';
 
 /**
@@ -204,14 +205,17 @@ export const listings = pgTable(
      */
     closedAt: timestamp('closed_at', { withTimezone: true, mode: 'date' }),
     /**
-     * When the creating client marked it withdrawn from its venue: the lists
-     * and the map leave it out unless asked (`views.browseListings`), and it
-     * is labelled wherever it is shown. Set only by `listings.setWithdrawn`
-     * (`PUT`/`DELETE /listings/{id}/withdrawn`), never by the upsert, so
-     * re-posting a listing keeps it. Opaque, like `closedAt`, which also covers
-     * desk rejections and says nothing about whether to show a paper.
+     * `withdrawn` or `desk_rejected` (`lib/venue-status.ts`) once the creating
+     * client marks the paper out of its venue's review, else null; and since
+     * when. The lists and the map leave such a paper out unless asked
+     * (`views.browseListings`), and it is labelled wherever it is shown. Set
+     * only by `listings.setVenueStatus` (`PUT`/`DELETE
+     * /listings/{id}/venue-status`), never by the upsert, so re-posting a
+     * listing keeps it. Unlike `closedAt`, which is about markets, this
+     * decides whether a paper is shown.
      */
-    withdrawnAt: timestamp('withdrawn_at', { withTimezone: true, mode: 'date' }),
+    venueStatus: text('venue_status').$type<VenueStatus>(),
+    venueStatusAt: timestamp('venue_status_at', { withTimezone: true, mode: 'date' }),
     createdAt: createdAt(),
   },
   (t) => [
@@ -232,6 +236,8 @@ export const listings = pgTable(
     // fresh, which view counting dirties, so drizzle/0042 also vacuums the
     // table far more often than autovacuum's default.
     index('listings_kind_id_idx').on(t.kind, t.id),
+    check('listings_venue_status_check', sql`${t.venueStatus} in ('withdrawn', 'desk_rejected')`),
+    check('listings_venue_status_at_check', sql`(${t.venueStatus} is null) = (${t.venueStatusAt} is null)`),
   ],
 );
 

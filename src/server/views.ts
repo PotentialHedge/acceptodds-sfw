@@ -628,7 +628,7 @@ export async function listingRelatedTo(
       .select({ listing: listings })
       .from(listingRelated)
       .innerJoin(listings, eq(listings.slug, listingRelated.relatedSlug))
-      .where(and(eq(listingRelated.listingId, listing.id), isNull(listings.withdrawnAt)))
+      .where(and(eq(listingRelated.listingId, listing.id), isNull(listings.venueStatus)))
       .orderBy(asc(listingRelated.position)),
     all
       ? [{ id: listing.id }]
@@ -719,7 +719,7 @@ function mapPointRows(kind: string, database: Database) {
  */
 export async function paperMap(kind: string, database: Database = getDb()): Promise<PaperMap> {
   const [rows, topics] = await Promise.all([
-    mapPointRows(kind, database).where(isNull(listings.withdrawnAt)).orderBy(asc(mapPoints.slug)),
+    mapPointRows(kind, database).where(isNull(listings.venueStatus)).orderBy(asc(mapPoints.slug)),
     database
       .select()
       .from(mapTopics)
@@ -751,7 +751,7 @@ export async function mapTitles(kind: string, database: Database = getDb()): Pro
     .select({ slug: listings.slug, title: listings.title })
     .from(mapPoints)
     .innerJoin(listings, eq(listings.slug, mapPoints.slug))
-    .where(and(eq(mapPoints.kind, kind), isNull(listings.withdrawnAt)));
+    .where(and(eq(mapPoints.kind, kind), isNull(listings.venueStatus)));
   return Object.fromEntries(rows.map((r) => [r.slug, r.title]));
 }
 
@@ -770,7 +770,7 @@ export async function mapScores(kind: string, database: Database = getDb()): Pro
       from map_points p
       join listings l on l.slug = p.slug
       join listing_reviews r on r.listing_id = l.id and r.kind = 'review'
-     where p.kind = ${kind} and l.withdrawn_at is null
+     where p.kind = ${kind} and l.venue_status is null
      group by l.slug
      order by l.slug
   `);
@@ -839,7 +839,7 @@ export async function listingMinimap(
       .select({ slug: mapPoints.slug, vector: mapPoints.vector })
       .from(mapPoints)
       .innerJoin(listings, eq(listings.slug, mapPoints.slug))
-      .where(and(eq(mapPoints.kind, kind), ne(mapPoints.slug, listing.slug), isNull(listings.withdrawnAt)))
+      .where(and(eq(mapPoints.kind, kind), ne(mapPoints.slug, listing.slug), isNull(listings.venueStatus)))
       .orderBy(d2)
       .limit(centre.vector ? MINIMAP_CANDIDATES : MINIMAP_NEAREST),
     database
@@ -908,10 +908,10 @@ export async function listingVenue(listing: Listing, database: Database = getDb(
 /**
  * Whether the paper is on its venue's map: the paper page's cheap check
  * before the browser asks for its minimap. `venue` is `listingVenue`'s, when
- * the caller already has it. A withdrawn paper is not: the map leaves it out.
+ * the caller already has it. A withdrawn or desk-rejected paper is not: the map leaves it out.
  */
 export async function onMap(listing: Listing, venue?: string | null, database: Database = getDb()): Promise<boolean> {
-  if (listing.withdrawnAt) return false;
+  if (listing.venueStatus) return false;
   const kind = venue === undefined ? await listingVenue(listing, database) : venue;
   if (kind === null) return false;
   const [row] = await database
@@ -957,7 +957,7 @@ export async function mapRelated(kind: string, database: Database = getDb()): Pr
       join map_points a on a.kind = ${kind} and a.slug = l.slug
       join map_points b on b.kind = ${kind} and b.slug = lr.related_slug
       join listings lb on lb.slug = lr.related_slug
-     where lr.position < ${MAP_RELATED_DEPTH} and l.withdrawn_at is null and lb.withdrawn_at is null
+     where lr.position < ${MAP_RELATED_DEPTH} and l.venue_status is null and lb.venue_status is null
      order by l.slug, lr.position
   `);
   return result.rows;
@@ -1569,7 +1569,8 @@ export interface BrowseRow {
   reviewCount: number;
 }
 
-export type WithdrawnFilter = 'include' | 'hide' | 'only';
+/** Papers out of their venue's review (`listings.venue_status`): left in, hidden, or alone. */
+export type OutFilter = 'include' | 'hide' | 'only';
 
 /** Rows on one page of `browseListings`, and how many there are in all. */
 export interface BrowsePage {
@@ -1624,8 +1625,11 @@ export async function browseListings(
     exceptHeldBy?: string | null;
     /** The account the `recommended` sort ranks for. */
     recommendFor?: string | null;
-    /** Withdrawn papers: left in (the default), `hide`, or `only` them. Standalone markets are never withdrawn. */
-    withdrawn?: WithdrawnFilter;
+    /**
+     * Withdrawn and desk-rejected papers: left in (the default), `hide`, or `only` them. Standalone
+     * markets are never either.
+     */
+    out?: OutFilter;
   },
   database: Database = getDb(),
 ): Promise<BrowsePage> {
@@ -1633,7 +1637,7 @@ export async function browseListings(
   const personal =
     q.followedBy || q.heldBy || q.exceptFollowedBy || q.exceptHeldBy || (q.sort === 'recommended' && q.recommendFor);
   if (personal || database !== getDb()) return readBrowsePage(q, database);
-  const withdrawn = q.withdrawn ?? 'include';
+  const out = q.out ?? 'include';
   const key = JSON.stringify([
     q.kind ?? null,
     q.status ?? null,
@@ -1642,10 +1646,10 @@ export async function browseListings(
     q.offset,
     q.limit,
     !!q.traded,
-    withdrawn,
+    out,
   ]);
   // The total depends on the filters alone: one count for every sort and page of them.
-  const countKey = JSON.stringify([q.kind ?? null, q.status ?? null, q.q ?? null, !!q.traded, withdrawn]);
+  const countKey = JSON.stringify([q.kind ?? null, q.status ?? null, q.q ?? null, !!q.traded, out]);
   const shareCount = (count: () => Promise<number>) => browseReads.get(`count:${countKey}`, BROWSE_READ_TTL_MS, count);
   return browseReads.get(`page:${key}`, BROWSE_READ_TTL_MS, () => readBrowsePage(q, database, shareCount));
 }
@@ -1837,9 +1841,9 @@ function browseQuery(q: BrowseFilter): { from: SQL; order: SQL[]; searching: boo
     q.heldBy ? held(q.heldBy) : undefined,
     q.exceptFollowedBy ? sql`not ${followed(q.exceptFollowedBy)}` : undefined,
     q.exceptHeldBy ? sql`not ${held(q.exceptHeldBy)}` : undefined,
-    // `l` is null on a standalone market's row, and that counts as not withdrawn.
-    q.withdrawn === 'hide' ? sql`l.withdrawn_at is null` : undefined,
-    q.withdrawn === 'only' ? sql`l.withdrawn_at is not null` : undefined,
+    // `l` is null on a standalone market's row, and that counts as still in review.
+    q.out === 'hide' ? sql`l.venue_status is null` : undefined,
+    q.out === 'only' ? sql`l.venue_status is not null` : undefined,
     predicate ?? undefined,
   ].filter((w): w is SQL => w !== undefined);
 
@@ -1944,7 +1948,7 @@ export async function mapSearch(
     kind,
     status: 'all',
     sort: 'relevance',
-    withdrawn: 'hide',
+    out: 'hide',
   });
   const result = await withSearchPlan(searching, database, (ex) =>
     ex.execute<{ slug: string }>(sql`

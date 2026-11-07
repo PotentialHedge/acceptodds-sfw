@@ -1,5 +1,5 @@
 {
-  "id": "a5f1cbc9-cf58-4571-bd6e-eae9d37bb8de",
+  "id": "b7a26d44-42df-4fc3-8874-4f9268e968c7",
   "prevId": "fca66109-d134-41b7-b185-ecc294e20bd7",
   "version": "7",
   "dialect": "postgresql",
@@ -2563,8 +2563,14 @@
           "primaryKey": false,
           "notNull": false
         },
-        "withdrawn_at": {
-          "name": "withdrawn_at",
+        "venue_status": {
+          "name": "venue_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "venue_status_at": {
+          "name": "venue_status_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -2670,7 +2676,16 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "listings_venue_status_check": {
+          "name": "listings_venue_status_check",
+          "value": "\"listings\".\"venue_status\" in ('withdrawn', 'desk_rejected')"
+        },
+        "listings_venue_status_at_check": {
+          "name": "listings_venue_status_at_check",
+          "value": "(\"listings\".\"venue_status\" is null) = (\"listings\".\"venue_status_at\" is null)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.map_points": {

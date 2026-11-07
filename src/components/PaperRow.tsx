@@ -1,5 +1,9 @@
 import Link from 'next/link';
 import { MathText } from '@/components/MathText';
+import { venueStatusLabel, type VenueStatus } from '@/lib/venue-status';
+
+/** Each status its own colour, so the two read apart at a glance. */
+const STATUS_COLOUR: Record<VenueStatus, string> = { withdrawn: 'text-down', desk_rejected: 'text-subtle' };
 
 type RowMarket = {
   question: string;
@@ -21,7 +25,7 @@ export function PaperRow({
   tldr,
   rating,
   ratingCount = 0,
-  withdrawn = false,
+  venueStatus = null,
   href,
   onPick,
 }: {
@@ -33,8 +37,8 @@ export function PaperRow({
   /** The mean review rating, on the venue's scale, at the row's right; nothing when null. */
   rating?: number | null;
   ratingCount?: number;
-  /** Labelled as withdrawn from its venue. */
-  withdrawn?: boolean;
+  /** Labelled as withdrawn or desk-rejected. */
+  venueStatus?: VenueStatus | null;
   /** Accepted from the market edition's callers and never drawn: no prices in the safe for work edition. */
   market?: RowMarket | null;
   volumeMicro?: bigint | string | null;
@@ -65,10 +69,10 @@ export function PaperRow({
             {name}
           </Link>
         )}
-        {(withdrawn || authors.length > 0) && (
+        {(venueStatus || authors.length > 0) && (
           <span className="block font-sans text-xs text-muted">
-            {withdrawn && <span className="text-down">Withdrawn</span>}
-            {withdrawn && authors.length > 0 && ' · '}
+            {venueStatus && <span className={STATUS_COLOUR[venueStatus]}>{venueStatusLabel(venueStatus)}</span>}
+            {venueStatus && authors.length > 0 && ' · '}
             {authorLine(authors)}
           </span>
         )}

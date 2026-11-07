@@ -1,6 +1,7 @@
 import { eq, getTableColumns, sql } from 'drizzle-orm';
 import { getDb, type Database } from '@/db';
 import { listingReferences, listingRelated, listings, listingTexts, type Listing, type ListingLink } from '@/db/schema';
+import type { VenueStatus } from '@/lib/venue-status';
 import { invalidateMap } from './map-cache';
 import { invalidateBrowseReads } from './market-cache';
 
@@ -143,22 +144,29 @@ export async function setClosed(
 }
 
 /**
- * Mark a listing withdrawn from its venue, or not any more (a withdrawal can be
- * reverted). Idempotent, and keeps the time it was first marked.
+ * Mark a listing withdrawn or desk-rejected, or clear it (`null`: a withdrawal
+ * can be reverted). Idempotent: the time is kept while the status stays the
+ * same, and restarts when it changes.
  */
-export async function setWithdrawn(
+export async function setVenueStatus(
   listing: Pick<Listing, 'id'>,
-  withdrawn: boolean,
+  status: VenueStatus | null,
   database: Database = getDb(),
-): Promise<Date | null> {
+): Promise<{ venueStatus: VenueStatus | null; venueStatusAt: Date | null }> {
   const [row] = await database
     .update(listings)
-    .set({ withdrawnAt: withdrawn ? sql`coalesce(${listings.withdrawnAt}, now())` : null })
+    .set({
+      venueStatus: status,
+      venueStatusAt:
+        status === null
+          ? null
+          : sql`case when ${listings.venueStatus} = ${status} then ${listings.venueStatusAt} else now() end`,
+    })
     .where(eq(listings.id, listing.id))
-    .returning({ withdrawnAt: listings.withdrawnAt });
+    .returning({ venueStatus: listings.venueStatus, venueStatusAt: listings.venueStatusAt });
   invalidateBrowseReads();
   invalidateMap();
-  return row?.withdrawnAt ?? null;
+  return { venueStatus: row?.venueStatus ?? null, venueStatusAt: row?.venueStatusAt ?? null };
 }
 
 /**

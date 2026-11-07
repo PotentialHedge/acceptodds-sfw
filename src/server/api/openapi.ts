@@ -320,24 +320,36 @@ export function buildRegistry(): OpenAPIRegistry {
     );
   }
 
-  for (const method of ['put', 'delete'] as const) {
-    r.registerPath(
-      op({
-        method,
-        path: '/listings/{id}/withdrawn',
-        tags: ['listings'],
-        summary: method === 'put' ? 'Mark a listing withdrawn' : 'Clear a listing’s withdrawal',
-        description:
-          method === 'put'
-            ? 'Marks the listing withdrawn from its venue (`withdrawnAt`): the home list and the map leave it out unless asked, a search lists it apart, and it is labelled. Idempotent, and keeps the time it was first marked. Its own call, so re-posting the listing keeps it.'
-            : 'Clears `withdrawnAt`, for a withdrawal that was reverted. Idempotent.',
-        scope: 'admin',
-        request: { params: z.object({ id: S.ListingRef }) },
-        ok: { status: 200, schema: S.SetWithdrawnResult, description: 'When it was marked, or null.' },
-        errors: { 404: 'not_found' },
-      }),
-    );
-  }
+  r.registerPath(
+    op({
+      method: 'put',
+      path: '/listings/{id}/venue-status',
+      tags: ['listings'],
+      summary: 'Mark a listing withdrawn or desk-rejected',
+      description:
+        'Sets `venueStatus`: the home list and the map leave the paper out unless asked, a search lists it apart, and it is labelled. Idempotent: `venueStatusAt` is kept while the status is the same. Its own call, so re-posting the listing keeps it.',
+      scope: 'admin',
+      request: {
+        params: z.object({ id: S.ListingRef }),
+        body: { content: { 'application/json': { schema: S.SetVenueStatusRequest } } },
+      },
+      ok: { status: 200, schema: S.SetVenueStatusResult, description: 'The status and since when.' },
+      errors: { 400: 'validation_error', 404: 'not_found' },
+    }),
+  );
+  r.registerPath(
+    op({
+      method: 'delete',
+      path: '/listings/{id}/venue-status',
+      tags: ['listings'],
+      summary: 'Clear a listing’s venue status',
+      description: 'Clears `venueStatus`, for a withdrawal that was reverted. Idempotent.',
+      scope: 'admin',
+      request: { params: z.object({ id: S.ListingRef }) },
+      ok: { status: 200, schema: S.SetVenueStatusResult, description: 'Cleared.' },
+      errors: { 404: 'not_found' },
+    }),
+  );
 
   r.registerPath(
     op({

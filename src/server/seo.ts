@@ -20,7 +20,7 @@ export async function sitemapPaths(database: Database = getDb()): Promise<string
   const papers = await database
     .select({ slug: listings.slug })
     .from(listings)
-    .where(isNull(listings.withdrawnAt))
+    .where(isNull(listings.venueStatus))
     .orderBy(desc(listings.createdAt))
     .limit(MAX_PAPERS);
   const loose = await database
