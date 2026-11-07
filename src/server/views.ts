@@ -32,11 +32,13 @@ import { isReviewFactor, REVIEW_FACTORS, roundMean, type ReviewFactor } from '@/
 import { normalizeSearch, prefixTsquery } from '@/lib/search';
 import { cosineDistance } from '@/lib/vectors';
 import { ACCEPTED_STATUSES, isOut } from '@/lib/venue-status';
+import { exampleOf, SEARCH_EXAMPLES } from '@/lib/search-examples';
 import { ApiError } from './api/errors';
 import { standingsGeneration, standingsChangesSince } from './standings-cache';
 import { valuations } from './valuation';
 import {
   browseReads,
+  exampleReads,
   BROWSE_READ_TTL_MS,
   institutionReads,
   INSTITUTION_READ_TTL_MS,
@@ -1648,7 +1650,18 @@ export async function browseListings(
     q.followedBy || q.heldBy || q.exceptFollowedBy || q.exceptHeldBy || (q.sort === 'recommended' && q.recommendFor);
   if (personal || database !== getDb()) return readBrowsePage(q, database);
   const out = q.out ?? 'include';
-  const key = JSON.stringify([
+  const key = browseKey(q);
+  // An example search the home page offers: kept warm, so never waited on (`example-warmer.ts`).
+  if (exampleOf(q.q)) return exampleReads.get(`page:${key}`, () => readBrowsePage(q, database));
+  // The total depends on the filters alone: one count for every sort and page of them.
+  const countKey = JSON.stringify([q.kind ?? null, q.status ?? null, q.q ?? null, !!q.traded, out]);
+  const shareCount = (count: () => Promise<number>) => browseReads.get(`count:${countKey}`, BROWSE_READ_TTL_MS, count);
+  return browseReads.get(`page:${key}`, BROWSE_READ_TTL_MS, () => readBrowsePage(q, database, shareCount));
+}
+
+/** A shared browse page's cache key: everything it depends on but a viewer. */
+function browseKey(q: Parameters<typeof browseListings>[0]): string {
+  return JSON.stringify([
     q.kind ?? null,
     q.status ?? null,
     q.sort,
@@ -1656,12 +1669,28 @@ export async function browseListings(
     q.offset,
     q.limit,
     !!q.traded,
-    out,
+    q.out ?? 'include',
   ]);
-  // The total depends on the filters alone: one count for every sort and page of them.
-  const countKey = JSON.stringify([q.kind ?? null, q.status ?? null, q.q ?? null, !!q.traded, out]);
-  const shareCount = (count: () => Promise<number>) => browseReads.get(`count:${countKey}`, BROWSE_READ_TTL_MS, count);
-  return browseReads.get(`page:${key}`, BROWSE_READ_TTL_MS, () => readBrowsePage(q, database, shareCount));
+}
+
+/** The home page's sizes: papers per page, and per page of the withdrawn and desk-rejected under a search. */
+export const HOME_PAGE_SIZE = 50;
+export const OUT_PAGE_SIZE = 10;
+
+/**
+ * Computes the home page's first page of each example search afresh, as the page reads it for a search
+ * in `kind` (its results, and the withdrawn and desk-rejected apart), one read at a time.
+ */
+export async function warmExampleSearches(kind: string): Promise<void> {
+  for (const example of SEARCH_EXAMPLES) {
+    for (const [out, limit] of [
+      ['hide', HOME_PAGE_SIZE],
+      ['only', OUT_PAGE_SIZE],
+    ] as const) {
+      const q = { kind, status: 'all', sort: 'relevance', q: example.q, offset: 0, limit, out } as const;
+      await exampleReads.refresh(`page:${browseKey(q)}`, () => readBrowsePage(q, getDb()));
+    }
+  }
 }
 
 async function readBrowsePage(

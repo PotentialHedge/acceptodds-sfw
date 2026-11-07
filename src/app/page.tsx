@@ -27,7 +27,15 @@ import { viewerFromHeaders } from '@/server/auth';
 import { currentVenue } from '@/server/current-venue';
 import { siteName } from '@/server/share';
 import * as events from '@/server/events';
-import { browseListings, marketKinds, type BrowsePage, type BrowseRow, type BrowseSort } from '@/server/views';
+import {
+  browseListings,
+  HOME_PAGE_SIZE,
+  marketKinds,
+  OUT_PAGE_SIZE,
+  type BrowsePage,
+  type BrowseRow,
+  type BrowseSort,
+} from '@/server/views';
 import { canRecommend } from '@/server/recommendations';
 import { rowLink } from '@/lib/paper-link';
 
@@ -40,11 +48,11 @@ const ON = ui.on;
 type Status = 'all';
 
 /** Papers per page in the main list; `?page=` pages it. */
-const PAGE = 50;
+const PAGE = HOME_PAGE_SIZE;
 /** Followed papers per page in the "Following" section; `?fpage=` pages it. */
 const FOLLOWING_PAGE = 10;
 /** Withdrawn and desk-rejected papers per page in the section under a search's results; `?opage=` pages it. */
-const OUT_PAGE = 10;
+const OUT_PAGE = OUT_PAGE_SIZE;
 /** The cookie remembering whether that section was left collapsed. */
 const FOLLOWING_COOKIE = 'home_following_open';
 
