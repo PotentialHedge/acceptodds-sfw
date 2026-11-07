@@ -19,6 +19,7 @@ import { CARD, cardPath } from '@/lib/preview-tags';
 import { MathText } from '@/components/MathText';
 import { RememberVenue } from '@/components/RememberVenue';
 import { RunningHead } from '@/components/RunningHead';
+import { PaperTopics } from '@/components/PaperTopics';
 import { TitleBlock } from '@/components/TitleBlock';
 import { ViewCount } from '@/components/ViewCount';
 import { ui } from '@/components/ui';
@@ -147,6 +148,7 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
         byline={listing.authors.length > 0 ? listing.authors.join(', ') : null}
         abstract={listing.summary}
         abstractMath
+        afterAbstract={<PaperTopics area={listing.primaryArea} keywords={listing.keywords} kind={listing.kind} />}
       >
         {listing.venueStatus && isOut(listing.venueStatus) && (
           <p className="mb-2 font-sans text-[13px] text-down">
