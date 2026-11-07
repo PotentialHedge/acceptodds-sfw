@@ -182,6 +182,16 @@ export const listings = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
+    /**
+     * `keywords` as the similarity service cleaned them (`PUT /listing-tags`): one per keyword after
+     * splitting each at semicolons, in order, its form shared by its other spellings ("LLMs", "large
+     * language model" -> "large language models"). Empty until it has run. The page still shows the
+     * keywords as written, linking each to its tag; `keyword:` searches both. Opaque.
+     */
+    tags: text('tags')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     /** The subject area the creating client files it under. Opaque. */
     primaryArea: text('primary_area'),
     /** A one-line summary, beside the full `summary`. */

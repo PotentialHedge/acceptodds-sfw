@@ -193,3 +193,23 @@ export async function setRelated(
   invalidateMap();
   return kept.length;
 }
+
+/**
+ * Replace the cleaned keywords (`listings.tags`) of each listing named, by slug, in one statement. A slug
+ * with no listing is skipped; a listing not named keeps its tags. Returns how many listings changed.
+ */
+export async function setTags(
+  entries: readonly { slug: string; tags: readonly string[] }[],
+  database: Database = getDb(),
+): Promise<number> {
+  if (entries.length === 0) return 0;
+  const result = await database.execute(sql`
+    update listings l
+       set tags = array(select jsonb_array_elements_text(t.tags))
+      from jsonb_to_recordset(${JSON.stringify(entries)}::jsonb) as t(slug text, tags jsonb)
+     where l.slug = t.slug
+       and l.tags is distinct from array(select jsonb_array_elements_text(t.tags))
+  `);
+  if ((result.rowCount ?? 0) > 0) invalidateBrowseReads();
+  return result.rowCount ?? 0;
+}

@@ -227,8 +227,8 @@ function searchPredicate(node: SearchNode, skip: SearchNode | null): SQL | null 
       const column = {
         title: sql`coalesce(l.title, m.question)`,
         author: sql`coalesce(array_to_string(l.authors, ' '), '')`,
-        // A newline between keywords, so a pattern never spans two of them.
-        keyword: sql`coalesce(array_to_string(l.keywords, E'\\n'), '')`,
+        // A newline between keywords, so a pattern never spans two of them; the cleaned tags count too.
+        keyword: sql`coalesce(array_to_string(l.keywords || l.tags, E'\\n'), '')`,
         area: sql`coalesce(l.primary_area, '')`,
         venue: ROW_KIND,
       }[node.field];

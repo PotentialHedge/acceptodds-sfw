@@ -351,6 +351,13 @@
       "when": 1794047569762,
       "tag": "0049_listing_venue_status",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1794062455415,
+      "tag": "0050_listing_tags",
+      "breakpoints": true
     }
   ]
 }

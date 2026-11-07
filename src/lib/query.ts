@@ -74,7 +74,12 @@ const ALIASES: Record<string, SearchField> = {
 export const FIELD_HELP: { field: SearchField; aliases: string[]; example: string; means: string }[] = [
   { field: 'title', aliases: ['t'], example: 'title:diffusion', means: 'title contains' },
   { field: 'author', aliases: ['a'], example: 'author:"de freitas"', means: 'an author contains' },
-  { field: 'keyword', aliases: ['kw'], example: 'keyword:"graph neural"', means: 'a keyword contains' },
+  {
+    field: 'keyword',
+    aliases: ['kw'],
+    example: 'keyword:"graph neural"',
+    means: 'a keyword, as written or cleaned, contains',
+  },
   { field: 'area', aliases: ['primaryArea'], example: 'area:optimization', means: 'primary area contains' },
   { field: 'venue', aliases: ['v', 'kind'], example: 'venue:iclr', means: 'venue contains' },
   { field: 'status', aliases: ['s'], example: 'status:settled', means: 'open, closed, settled or void' },

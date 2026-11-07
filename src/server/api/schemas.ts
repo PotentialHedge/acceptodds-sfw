@@ -1383,6 +1383,26 @@ const MAX_MAP_VECTOR = 256;
 
 const MapTopicInput = z.object({ number: z.number().int().min(0), label: z.string().min(1).max(200) });
 
+export const SetTagsRequest = z
+  .object({
+    tags: z
+      .array(
+        z.object({
+          slug: Slug,
+          tags: z.array(z.string().trim().min(1).max(200)).max(100).meta({
+            description:
+              'One per keyword, in order, after splitting each at semicolons: its cleaned form, shared by its other spellings. Empty clears them.',
+          }),
+        }),
+      )
+      .max(5000),
+  })
+  .meta({ id: 'SetTagsRequest' });
+
+export const SetTagsResult = z
+  .object({ count: z.number().int().min(0).meta({ description: 'Listings whose tags changed.' }) })
+  .meta({ id: 'SetTagsResult' });
+
 export const SetMapRequest = z
   .object({
     kind: Kind.meta({

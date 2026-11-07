@@ -148,7 +148,9 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
         byline={listing.authors.length > 0 ? listing.authors.join(', ') : null}
         abstract={listing.summary}
         abstractMath
-        afterAbstract={<PaperTopics area={listing.primaryArea} keywords={listing.keywords} kind={listing.kind} />}
+        afterAbstract={
+          <PaperTopics area={listing.primaryArea} keywords={listing.keywords} tags={listing.tags} kind={listing.kind} />
+        }
       >
         {listing.venueStatus && isOut(listing.venueStatus) && (
           <p className="mb-2 font-sans text-[13px] text-down">

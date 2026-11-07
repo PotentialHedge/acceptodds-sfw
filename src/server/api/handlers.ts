@@ -34,7 +34,7 @@ import {
   rotateInvite,
   updateGroup,
 } from '../groups';
-import { setClosed, setRelated, setText, setVenueStatus, upsertListing } from '../listings';
+import { setClosed, setRelated, setTags, setText, setVenueStatus, upsertListing } from '../listings';
 import { setMap } from '../map';
 import { currentAnnouncements, deleteAnnouncement as deleteAnnouncementRow, postAnnouncement } from '../announcements';
 import { mapCached } from '../map-cache';
@@ -458,6 +458,13 @@ export const getListingReviewQuery = route(async (req, params) => {
 });
 
 /** Replace one venue's paper map. Written by `map.ts`; not market state. */
+/** Replace the cleaned keywords of many listings at once. Written by the similarity service. */
+export const putListingTags = route(async (req) => {
+  const principal = await requireAuth(req, 'admin');
+  const body = await parseBody(req, S.SetTagsRequest);
+  return respond(S.SetTagsResult, { count: await setTags(body.tags) }, { principal });
+});
+
 export const putMap = route(async (req) => {
   const principal = await requireAuth(req, 'admin');
   const body = await parseBody(req, S.SetMapRequest);

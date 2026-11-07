@@ -467,6 +467,20 @@ export function buildRegistry(): OpenAPIRegistry {
   r.registerPath(
     op({
       method: 'put',
+      path: '/listing-tags',
+      tags: ['listings'],
+      summary: 'Set listings’ cleaned keywords',
+      description:
+        'Replaces each named listing’s tags: one per keyword (each split at semicolons), as a separate service cleaned it, shared by its other spellings. The paper page links each keyword to a search for its tag, and `keyword:` searches both. A slug with no listing is skipped; listings not named keep theirs.',
+      scope: 'admin',
+      request: { body: { content: { 'application/json': { schema: S.SetTagsRequest } } } },
+      ok: { status: 200, schema: S.SetTagsResult, description: 'How many changed.' },
+    }),
+  );
+
+  r.registerPath(
+    op({
+      method: 'put',
       path: '/map',
       tags: ['listings'],
       summary: 'Set the paper map',
