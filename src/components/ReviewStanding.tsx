@@ -252,7 +252,7 @@ function CohortKey({ cohort, field, query }: { cohort: Shown['cohort']; field: R
             href={`/?${new URLSearchParams({ kind: field.kind, q: query })}`}
             target="_blank"
             rel="noopener"
-            className="border border-rule bg-rule-soft px-2 py-0.5 font-semibold text-ink hover:no-underline"
+            className={ui.linkBtn}
           >
             Open search <span aria-hidden>↗</span>
             <span className="sr-only"> (opens in a new tab)</span>
