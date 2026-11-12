@@ -55,18 +55,18 @@ export function PaperReviews({
           id={reviewAnchor(review.externalId)}
           className="mt-5 scroll-mt-4 border-t border-rule pt-3"
         >
-          <Heading item={review} anchor={reviewAnchor(review.externalId)} />
+          <Heading item={review} anchor={reviewAnchor(review.externalId)} source={sourceUrl} />
           <Scores item={review} />
           <Collapsed summary="Read review">
             <Sections item={review} />
           </Collapsed>
-          <Comments comments={comments} />
+          <Comments comments={comments} source={sourceUrl} />
         </article>
       ))}
       {loose.length > 0 && (
         <div className="mt-5 border-t border-rule pt-3">
           <h4 className={ui.runIn}>Comments on the paper</h4>
-          <Comments comments={loose} />
+          <Comments comments={loose} source={sourceUrl} />
         </div>
       )}
       <p className={ui.fine}>
@@ -83,20 +83,39 @@ export function PaperReviews({
   );
 }
 
-/** Who wrote it and when; the date (or "link", undated) is the item's permalink, `#anchor`. */
-function Heading({ item, anchor }: { item: ListingReview; anchor: string }) {
+/**
+ * Who wrote it and when; the date (or "link", undated) is the item's permalink, `#anchor`. Beside it, the item
+ * itself on OpenReview, when the paper's forum there is known.
+ */
+function Heading({ item, anchor, source }: { item: ListingReview; anchor: string; source: string | null }) {
+  const venue = source ? noteUrl(source, item.externalId) : null;
   return (
     <header className="flex flex-wrap items-baseline justify-between gap-x-3">
       <span className={ui.runIn}>{item.author ?? 'Anonymous'}</span>
-      <a
-        href={`#${anchor}`}
-        className="font-sans text-xs text-muted hover:text-accent hover:underline"
-        title={`Link to this ${item.kind}`}
-      >
-        {item.postedAt ? <time>{day(item.postedAt)}</time> : 'link'} #
-      </a>
+      <span className="flex gap-3 font-sans text-xs text-muted">
+        {venue && (
+          <a href={venue} className="hover:text-accent hover:underline" rel="noopener noreferrer" target="_blank">
+            OpenReview ↗
+          </a>
+        )}
+        <a href={`#${anchor}`} className="hover:text-accent hover:underline" title={`Link to this ${item.kind}`}>
+          {item.postedAt ? <time>{day(item.postedAt)}</time> : 'link'} #
+        </a>
+      </span>
     </header>
   );
+}
+
+/** A note on its OpenReview forum page (`forum?id=…&noteId=…`), or `null` when `forum` is not one. */
+function noteUrl(forum: string, noteId: string): string | null {
+  try {
+    const url = new URL(forum);
+    if (url.hostname !== 'openreview.net' || url.pathname !== '/forum' || !url.searchParams.has('id')) return null;
+    url.searchParams.set('noteId', noteId);
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 function Scores({ item }: { item: ListingReview }) {
@@ -136,13 +155,13 @@ function Collapsed({ summary, children }: { summary: string; children: ReactNode
   );
 }
 
-function Comments({ comments }: { comments: ListingReview[] }) {
+function Comments({ comments, source }: { comments: ListingReview[]; source: string | null }) {
   if (comments.length === 0) return null;
   return (
     <ReviewComments
       ids={comments.map((c) => c.externalId)}
       items={comments.map((c) => (
-        <CommentItem key={c.externalId} item={c} />
+        <CommentItem key={c.externalId} item={c} source={source} />
       ))}
     />
   );
@@ -152,7 +171,7 @@ function Comments({ comments }: { comments: ListingReview[] }) {
  * One comment as a card of its own, headed on a tinted strip, so a long
  * exchange reads as separate turns. The one a link points at is outlined (`:target`, or `data-linked` from `ReviewComments`).
  */
-function CommentItem({ item }: { item: ListingReview }) {
+function CommentItem({ item, source }: { item: ListingReview; source: string | null }) {
   const anchor = reviewCommentAnchor(item.externalId);
   return (
     <div
@@ -160,7 +179,7 @@ function CommentItem({ item }: { item: ListingReview }) {
       className="mt-3 scroll-mt-4 border border-rule bg-card target:border-accent target:ring-1 target:ring-accent data-linked:border-accent data-linked:ring-1 data-linked:ring-accent"
     >
       <div className="border-b border-rule-soft bg-highlight px-3 py-1.5">
-        <Heading item={item} anchor={anchor} />
+        <Heading item={item} anchor={anchor} source={source} />
         {item.title && (
           <p className="mt-0.5 text-[15px] font-semibold">
             <MathText text={item.title} />
