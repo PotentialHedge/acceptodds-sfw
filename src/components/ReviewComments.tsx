@@ -1,15 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { reviewCommentAnchor } from '@/lib/reviews';
 import { ui } from './ui';
 
 /** Comments shown before "Show N more". */
 const SHOWN = 3;
-
-/** A review comment's element id, which its permalink points at. */
-export function reviewCommentAnchor(externalId: string): string {
-  return `comment-${externalId}`;
-}
 
 /**
  * The comments under one review (or on the paper itself): collapsed behind

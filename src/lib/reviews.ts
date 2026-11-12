@@ -179,3 +179,13 @@ export function threadReviews<T extends Threaded>(items: readonly T[]) {
     loose,
   };
 }
+
+/** A review's element id on its paper's page, which its permalink points at. */
+export function reviewAnchor(externalId: string): string {
+  return `review-${externalId}`;
+}
+
+/** A comment's element id under a review, which its permalink points at. */
+export function reviewCommentAnchor(externalId: string): string {
+  return `comment-${externalId}`;
+}

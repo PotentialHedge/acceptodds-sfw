@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
 import { Markdown } from '@/components/Markdown';
 import { MathText } from '@/components/MathText';
-import { ReviewComments, reviewCommentAnchor } from '@/components/ReviewComments';
+import { ReviewComments } from '@/components/ReviewComments';
 import { ReviewFigure } from '@/components/ReviewStanding';
 import { ui } from '@/components/ui';
 import type { ListingReview } from '@/db/schema';
 import { day } from '@/lib/format';
 import { reviewMath } from '@/lib/review-math';
-import { meanRating, OVERALL, threadReviews } from '@/lib/reviews';
+import { meanRating, OVERALL, reviewAnchor, reviewCommentAnchor, threadReviews } from '@/lib/reviews';
 import type { ReviewField, ReviewSeries } from '@/server/review-field';
 
 /**
@@ -81,10 +81,6 @@ export function PaperReviews({
       </p>
     </section>
   );
-}
-
-function reviewAnchor(externalId: string): string {
-  return `review-${externalId}`;
 }
 
 /** Who wrote it and when; the date (or "link", undated) is the item's permalink, `#anchor`. */
