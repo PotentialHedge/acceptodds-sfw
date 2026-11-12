@@ -22,6 +22,14 @@ export function ReviewComments({ ids, items }: { ids: string[]; items: ReactNode
   // The comment a link asked for, scrolled to once the render that reveals it has landed.
   const target = useRef<string | null>(null);
 
+  // Before the effect that sets `target`: on mount it must run while nothing is asked for yet, and scroll only
+  // after the render that reveals the comment.
+  useEffect(() => {
+    if (!target.current) return;
+    document.getElementById(target.current)?.scrollIntoView({ block: 'start' });
+    target.current = null;
+  }, [open, all]);
+
   useEffect(() => {
     const anchors = ids.map(reviewCommentAnchor);
     const follow = () => {
@@ -36,12 +44,6 @@ export function ReviewComments({ ids, items }: { ids: string[]; items: ReactNode
     window.addEventListener('hashchange', follow);
     return () => window.removeEventListener('hashchange', follow);
   }, [ids]);
-
-  useEffect(() => {
-    if (!target.current) return;
-    document.getElementById(target.current)?.scrollIntoView({ block: 'start' });
-    target.current = null;
-  }, [open, all]);
 
   // One more is shown rather than hidden behind a button of its own.
   const hidden = items.length > SHOWN + 1 ? items.length - SHOWN : 0;
