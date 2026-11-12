@@ -26,7 +26,11 @@ export function ReviewComments({ ids, items }: { ids: string[]; items: ReactNode
   // after the render that reveals the comment.
   useEffect(() => {
     if (!target.current) return;
-    document.getElementById(target.current)?.scrollIntoView({ block: 'start' });
+    // Marked by hand: a browser sets `:target` only on an element there when the page arrived.
+    for (const el of document.querySelectorAll('[data-linked]')) el.removeAttribute('data-linked');
+    const el = document.getElementById(target.current);
+    el?.setAttribute('data-linked', '');
+    el?.scrollIntoView({ block: 'start' });
     target.current = null;
   }, [open, all]);
 

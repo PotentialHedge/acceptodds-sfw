@@ -150,14 +150,14 @@ function Comments({ comments }: { comments: ListingReview[] }) {
 
 /**
  * One comment as a card of its own, headed on a tinted strip, so a long
- * exchange reads as separate turns. The one a link points at is outlined.
+ * exchange reads as separate turns. The one a link points at is outlined (`:target`, or `data-linked` from `ReviewComments`).
  */
 function CommentItem({ item }: { item: ListingReview }) {
   const anchor = reviewCommentAnchor(item.externalId);
   return (
     <div
       id={anchor}
-      className="mt-3 scroll-mt-4 border border-rule bg-card target:border-accent target:ring-1 target:ring-accent"
+      className="mt-3 scroll-mt-4 border border-rule bg-card target:border-accent target:ring-1 target:ring-accent data-linked:border-accent data-linked:ring-1 data-linked:ring-accent"
     >
       <div className="border-b border-rule-soft bg-highlight px-3 py-1.5">
         <Heading item={item} anchor={anchor} />
