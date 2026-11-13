@@ -115,3 +115,124 @@
     margin-right: 0.75em;
   }
 }
+
+/* A version diff (`lib/version-diff.ts`, the paper's diff page): HTML built as a string, so styled here. */
+.vdiff {
+  & p {
+    margin-top: 0.5rem;
+    font-size: 15px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+  }
+  & h4 {
+    margin: 1.25rem 0 0.25rem;
+    font-family: var(--font-serif);
+    font-size: 15px;
+    font-variant-caps: small-caps;
+  }
+  & p.eq {
+    overflow-x: auto;
+    text-align: center;
+    overflow-wrap: normal;
+    white-space: nowrap;
+  }
+  & p.cap {
+    font-size: 13px;
+    color: var(--color-subtle);
+  }
+  & var {
+    font-family: var(--font-serif);
+    font-style: italic;
+  }
+  & del {
+    scroll-margin-top: 4rem;
+    background: var(--color-reject-soft);
+    color: var(--color-reject);
+    text-decoration-color: color-mix(in srgb, var(--color-reject) 60%, transparent);
+  }
+  & ins {
+    scroll-margin-top: 4rem;
+    background: var(--color-accept-soft);
+    color: var(--color-accept);
+    text-decoration: none;
+  }
+  & sub,
+  & sup {
+    font-size: 0.72em;
+  }
+  & .up {
+    color: var(--color-up);
+  }
+  & .down {
+    color: var(--color-down);
+  }
+  /* The changes-only list. */
+  & ol.passages {
+    margin-top: 0.75rem;
+    list-style: none;
+    padding: 0;
+    & > li {
+      margin-top: 0.75rem;
+      scroll-margin-top: 1rem;
+      border-top: 1px solid var(--color-rule-soft);
+      padding-top: 0.5rem;
+    }
+  }
+  & .meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0 0.75rem;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--color-muted);
+    & > span:last-child {
+      display: flex;
+      gap: 0.75rem;
+    }
+    & a:hover {
+      color: var(--color-accent);
+      text-decoration: underline;
+    }
+  }
+  & details.changes {
+    margin-top: 0.75rem;
+    border-block: 1px solid var(--color-rule);
+    padding: 0.5rem 0;
+    & > summary {
+      cursor: pointer;
+      font-family: var(--font-sans);
+      font-size: 13px;
+      color: var(--color-accent);
+    }
+  }
+  & article {
+    margin-top: 0.5rem;
+  }
+  /* The whole-text view's index of changes. */
+  & ol.index {
+    margin-top: 0.5rem;
+    list-style: none;
+    padding: 0;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    @media (min-width: 640px) {
+      columns: 2;
+    }
+    & li {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      break-inside: avoid;
+    }
+    & .sec {
+      color: var(--color-muted);
+    }
+    & .down {
+      text-decoration: line-through;
+    }
+    & a:hover {
+      text-decoration: underline;
+    }
+  }
+}

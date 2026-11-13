@@ -1382,12 +1382,15 @@ const DiffCounts = {
   passages: WordCount.meta({ description: 'Changed passages; changes a few words apart count as one.' }),
 };
 
+const DiffOp = z.union([z.literal(-1), z.literal(0), z.literal(1)]);
+const DiffText = z.string().max(FULL_TEXT_MAX).refine(noNul, 'contains a NUL');
+
 export const DiffRunBody = z
-  .tuple([z.union([z.literal(-1), z.literal(0), z.literal(1)]), z.string().max(FULL_TEXT_MAX)])
+  .union([z.tuple([DiffOp, DiffText]), z.tuple([DiffOp, DiffText, z.number().int().min(0).max(63)])])
   .meta({
     id: 'DiffRun',
     description:
-      '`[op, text]`: 0 in both versions, -1 only in the older, 1 only in the newer. Words are separated by spaces; a word `\\n` starts a paragraph, `\\n#` a heading.',
+      '`[op, text, style?]`: op 0 in both versions, -1 only in the older, 1 only in the newer; words separated by spaces. A run that is only `\\n` starts a paragraph, `\\n#` a heading, `\\n$` a display equation, `\\n@` a caption. `style` is a bitmask: 1 bold, 2 italic, 4 superscript, 8 math, 16 subscript, 32 set against the run before with no space.',
   });
 
 export const SetVersionsRequest = z
@@ -1401,7 +1404,7 @@ export const SetVersionsRequest = z
           ...DiffCounts,
           runs: z
             .array(DiffRunBody)
-            .max(20_000)
+            .max(100_000)
             .meta({ description: 'The newer text whole, with the older’s removed words in place.' }),
         }),
       )

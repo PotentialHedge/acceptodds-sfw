@@ -387,9 +387,9 @@ export const listingVersions = pgTable(
 export type ListingVersion = typeof listingVersions.$inferSelect;
 
 /**
- * The text of version `to_seq`, whole, as runs against version `from_seq`: `[op, text]`, 0
- * unchanged, -1 only in the older, 1 only in the newer. In `text` a line break starts a
- * paragraph, and a line break then `#` a heading.
+ * The text of version `to_seq`, whole, as runs against version `from_seq`: `[op, text, style?]`,
+ * 0 unchanged, -1 only in the older, 1 only in the newer. A run that is only `\n` starts a
+ * paragraph, `\n#` a heading, `\n$` a display equation, `\n@` a caption (`lib/version-diff.ts`).
  */
 export const listingVersionDiffs = pgTable(
   'listing_version_diffs',
@@ -411,7 +411,8 @@ export const listingVersionDiffs = pgTable(
   ],
 );
 
-export type DiffRun = [op: -1 | 0 | 1, text: string];
+/** `style`: `scraper/layout.py`'s bitmask (bold, italic, superscript, math, subscript, glued); absent is 0. */
+export type DiffRun = [op: -1 | 0 | 1, text: string] | [op: -1 | 0 | 1, text: string, style: number];
 export type ListingVersionDiff = typeof listingVersionDiffs.$inferSelect;
 
 /**

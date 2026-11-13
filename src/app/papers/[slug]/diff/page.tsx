@@ -1,16 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { DiffBody } from '@/components/DiffBody';
 import { ChangeStepper, DiffPicker } from '@/components/DiffControls';
 import { MathText } from '@/components/MathText';
-import { ChangeIndex, DiffParagraphs, PassageList, changeAnchor } from '@/components/VersionDiff';
 import { ui } from '@/components/ui';
 import type { ListingVersion } from '@/db/schema';
 import { day } from '@/lib/format';
-import { paragraphs, passages } from '@/lib/version-diff';
 import { ApiError } from '@/server/api/errors';
 import { siteName } from '@/server/share';
-import { versionDiff, versionsOf } from '@/server/versions';
+import { versionsOf } from '@/server/versions';
 import { resolveListing } from '@/server/views';
 
 export const dynamic = 'force-dynamic';
@@ -59,7 +58,7 @@ export default async function PaperDiffPage({ params, searchParams }: Params) {
   const { slug } = await params;
   const q = await searchParams;
   const listing = await load(slug);
-  const { versions } = await versionsOf(listing.id);
+  const { versions, diffs } = await versionsOf(listing.id);
   const paperHref = `/papers/${encodeURIComponent(listing.slug)}`;
   const base = `${paperHref}/diff`;
 
@@ -94,13 +93,12 @@ export default async function PaperDiffPage({ params, searchParams }: Params) {
   if (from > to) [from, to] = [to, from];
   if (from === to) [from, to] = to > 0 ? [to - 1, to] : [0, 1];
   const view = q.view === 'text' ? 'text' : 'changes';
-  const d = await versionDiff(listing.id, from, to);
+  // Only the counts here: the text comes from `diff/body`, so it is sent once.
+  const d = diffs.find((x) => x.fromSeq === from && x.toSeq === to);
   const older = versions[from]!;
   const newer = versions[to]!;
   const forum = listing.links.find((l) => l.url.includes('openreview.net/forum'))?.url ?? null;
   const history = forum?.replace('/forum?', '/revisions?') ?? null;
-  const ps = d ? passages(d.runs) : [];
-  const link = (f: number, t: number, v: string, hash = '') => `${base}?from=${f}&to=${t}&view=${v}${hash}`;
 
   return (
     <main className={ui.page}>
@@ -163,22 +161,8 @@ export default async function PaperDiffPage({ params, searchParams }: Params) {
             <span className="text-down">−{d.wordsRemoved.toLocaleString('en-US')}</span> words.
           </p>
 
-          {view === 'changes' ? (
-            <PassageList passages={ps} wholeHref={(n) => link(from, to, 'text', `#${changeAnchor(n)}`)} />
-          ) : (
-            <>
-              <details className="mt-3 border-y border-rule py-2">
-                <summary className="cursor-pointer font-sans text-[13px] text-accent">
-                  List of the {ps.length} changes
-                </summary>
-                <ChangeIndex passages={ps} />
-              </details>
-              <article className="mt-2">
-                <DiffParagraphs paragraphs={paragraphs(d.runs)} anchors />
-              </article>
-              <ChangeStepper total={ps.length} />
-            </>
-          )}
+          <DiffBody key={`${from}-${to}-${view}`} src={`${base}/body?from=${from}&to=${to}&view=${view}`} />
+          {view === 'text' && <ChangeStepper total={d.passages} />}
         </>
       )}
 
