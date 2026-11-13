@@ -91,4 +91,27 @@ describe('version diffs', () => {
       '<tr class="head"><td></td><td colspan="2">Accuracy</td></tr><tr class="gap"><td colspan="99">⋯</td></tr><tr><td>Ours</td><td><del>59.61</del> <ins>61.20</ins></td><td>80.1</td></tr>',
     );
   });
+
+  it('makes all the changes in one table row one passage', () => {
+    const cells = (xs: string[]): DiffRun[] =>
+      xs.flatMap((x): DiffRun[] => [
+        [0, '\n&'],
+        [0, x],
+      ]);
+    const row: DiffRun[] = [
+      [0, '\n|'],
+      ...cells(['Ours', '1', '2', '3', '4', '5', '6', '7']),
+      [0, '\n&'],
+      [-1, '8'],
+      [1, '9'],
+      ...cells(['a', 'b', 'c', 'd', 'e', 'f', 'g']),
+      [0, '\n&'],
+      [1, '10'],
+    ];
+    const ps = passages([[0, '\n|'], ...cells(['Method', 'x']), ...row, ...row]);
+    expect(ps.map((x) => [x.number, x.added, x.removed])).toEqual([
+      [1, 2, 1],
+      [2, 2, 1],
+    ]);
+  });
 });

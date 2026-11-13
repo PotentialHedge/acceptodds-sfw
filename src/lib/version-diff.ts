@@ -59,7 +59,10 @@ export interface Passage {
   removed: number;
 }
 
-/** Changes fewer than this many unchanged words apart are one passage. As `scraper/revisions.py`. */
+/**
+ * Changes fewer than this many unchanged words apart are one passage, as are all the changes in
+ * one table row. As `scraper/revisions.py`.
+ */
 export const JOIN_GAP = 6;
 
 type Item =
@@ -73,10 +76,16 @@ function items(runs: readonly DiffRun[]): Item[] {
   const out: Item[] = [];
   let gap = JOIN_GAP;
   let passage = 0;
+  // The table row each word is in (0: none), and the row of the last change: the changes in one
+  // row are one passage, however far apart.
+  let row = 0;
+  let rows = 0;
+  let changedRow = -1;
   for (const [op, text, style = 0] of runs) {
     const kind = MARKS[text];
     const cell = kind ? null : CELL.exec(text);
     if (kind || cell) {
+      if (kind) row = kind === 'row' ? ++rows : 0;
       // A removed break is layout, not text: it is not drawn.
       if (op !== -1) out.push(kind ? { mark: kind } : { mark: 'cell', cols: Number(cell![1] || 1) });
       continue;
@@ -91,9 +100,10 @@ function items(runs: readonly DiffRun[]): Item[] {
         out.push({ mark: null, op, word, style: st });
         return;
       }
-      const starts = gap >= JOIN_GAP;
+      const starts = gap >= JOIN_GAP && !(row > 0 && row === changedRow);
       if (starts) passage += 1;
       gap = 0;
+      changedRow = row;
       out.push({ mark: null, op, word, style: st, ...(starts ? { passage } : {}) });
     });
   }
