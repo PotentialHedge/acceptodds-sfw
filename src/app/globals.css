@@ -140,6 +140,35 @@
     font-size: 13px;
     color: var(--color-subtle);
   }
+  /* A table from the paper: its rows and cells, numbers in tabular figures, wide ones scroll. */
+  & .tab {
+    margin-top: 0.75rem;
+    overflow-x: auto;
+    & table {
+      border-collapse: collapse;
+      border-block: 1px solid var(--color-rule);
+      font-size: 13px;
+      line-height: 1.45;
+      font-variant-numeric: tabular-nums;
+    }
+    & td {
+      padding: 0.15rem 0.6rem;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+    & td:first-child {
+      padding-left: 0.25rem;
+    }
+    & tr.head td {
+      color: var(--color-muted);
+    }
+    & tr.gap td {
+      padding: 0;
+      text-align: center;
+      color: var(--color-subtle);
+      line-height: 1;
+    }
+  }
   & var {
     font-family: var(--font-serif);
     font-style: italic;

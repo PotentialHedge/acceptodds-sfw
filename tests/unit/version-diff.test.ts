@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DiffRun } from '@/db/schema';
-import { GLUE, ITALIC, MATHS, SUB, paragraphs, paragraphsHtml, passages } from '@/lib/version-diff';
+import { GLUE, ITALIC, MATHS, SUB, paragraphs, paragraphsHtml, passages, passagesHtml } from '@/lib/version-diff';
 
 const runs: DiffRun[] = [
   [0, '\n#'],
@@ -50,5 +50,45 @@ describe('version diffs', () => {
     expect(ps[0]!.cutStart).toBe(true);
     expect(ps[0]!.cutEnd).toBe(false);
     expect(ps[0]!.paragraphs[0]!.spans[0]).toEqual({ op: 0, text: 'and it works', style: 0 });
+  });
+
+  it('sets a table as rows of cells, and a change in it with its first row over it', () => {
+    const table: DiffRun[] = [
+      [0, 'Results follow.'],
+      [0, '\n|'],
+      [0, '\n&'],
+      [0, '\n&2'],
+      [0, 'Accuracy'],
+      [0, '\n|'],
+      [0, '\n&'],
+      [0, 'Method'],
+      [0, '\n&'],
+      [0, 'top-1'],
+      [0, '\n&'],
+      [0, 'top-5'],
+      [0, '\n|'],
+      [0, '\n&'],
+      [0, 'Ours'],
+      [0, '\n&'],
+      [-1, '59.61'],
+      [1, '61.20'],
+      [0, '\n&'],
+      [0, '80.1'],
+      [0, '\n'],
+      [0, 'After the table the text goes on.'],
+    ];
+    const ps = paragraphs(table);
+    expect(ps.map((p) => p.kind)).toEqual(['p', 'row', 'row', 'row', 'p']);
+    expect(paragraphsHtml(ps.slice(1, 2))).toBe(
+      '<div class="tab"><table><tbody><tr><td></td><td colspan="2">Accuracy</td></tr></tbody></table></div>',
+    );
+    const [x] = passages(table);
+    expect(x!.paragraphs.map((p) => p.kind)).toEqual(['row']);
+    expect(x!.paragraphs[0]!.spans.map((s) => s.text)).toEqual(['Ours', '59.61', '61.20', '80.1']);
+    expect(x!.head!.spans.map((s) => s.text)).toEqual(['Accuracy']);
+    expect([x!.cutStart, x!.cutEnd]).toEqual([false, false]);
+    expect(passagesHtml([x!], () => '#')).toContain(
+      '<tr class="head"><td></td><td colspan="2">Accuracy</td></tr><tr class="gap"><td colspan="99">⋯</td></tr><tr><td>Ours</td><td><del>59.61</del> <ins>61.20</ins></td><td>80.1</td></tr>',
+    );
   });
 });

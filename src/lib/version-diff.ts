@@ -1,7 +1,8 @@
 /**
  * Reading a version diff (`listing_version_diffs.runs`): the newer text whole, as runs
  * `[op, text, style?]` of unchanged (0), removed (-1) and added (1) words. A run that is only
- * `\n` starts a paragraph, `\n#` a heading, `\n$` a display equation and `\n@` a caption.
+ * `\n` starts a paragraph, `\n#` a heading, `\n$` a display equation, `\n@` a caption and `\n|`
+ * a table row; in a row, `\n&` starts a cell (`\n&3` one over three columns).
  * `style` is `scraper/layout.py`'s bitmask. Two ways to read it: the whole text, and only the
  * changed passages with a little context; both come out as HTML, since a paper is thousands
  * of spans and React elements for each would send the text twice. Client-safe.
@@ -18,9 +19,10 @@ export const SUB = 16;
 /** Set against the run before it, with no space: a subscript after its symbol. */
 export const GLUE = 32;
 
-export type Kind = 'p' | 'h' | 'eq' | 'cap';
+export type Kind = 'p' | 'h' | 'eq' | 'cap' | 'row';
 
-const MARKS: Record<string, Kind> = { '\n': 'p', '\n#': 'h', '\n$': 'eq', '\n@': 'cap' };
+const MARKS: Record<string, Kind> = { '\n': 'p', '\n#': 'h', '\n$': 'eq', '\n@': 'cap', '\n|': 'row' };
+const CELL = /^\n&(\d*)$/;
 
 export interface Span {
   op: Op;
@@ -30,9 +32,17 @@ export interface Span {
   passage?: number;
 }
 
+/** A table cell: the columns it spans, and the index in its row's `spans` where it starts. */
+export interface Cell {
+  cols: number;
+  start: number;
+}
+
 export interface Paragraph {
   kind: Kind;
   spans: Span[];
+  /** A row's cells, in order. */
+  cells?: Cell[];
 }
 
 export interface Passage {
@@ -42,6 +52,8 @@ export interface Passage {
   /** It starts and ends inside a paragraph, so "…" goes before and after. */
   cutStart: boolean;
   cutEnd: boolean;
+  /** For a change in a table, the table's first row, when it is not among `paragraphs`. */
+  head?: Paragraph;
   paragraphs: Paragraph[];
   added: number;
   removed: number;
@@ -50,19 +62,23 @@ export interface Passage {
 /** Changes fewer than this many unchanged words apart are one passage. As `scraper/revisions.py`. */
 export const JOIN_GAP = 6;
 
-type Item = { mark: Kind } | { mark: null; op: Op; word: string; style: number; passage?: number };
+type Item =
+  | { mark: Kind }
+  | { mark: 'cell'; cols: number }
+  | { mark: null; op: Op; word: string; style: number; passage?: number };
 type Word = Extract<Item, { mark: null }>;
 
-/** The runs as one stream of words and paragraph marks, each passage's first change numbered. */
+/** The runs as one stream of words and marks, each passage's first change numbered. */
 function items(runs: readonly DiffRun[]): Item[] {
   const out: Item[] = [];
   let gap = JOIN_GAP;
   let passage = 0;
   for (const [op, text, style = 0] of runs) {
     const kind = MARKS[text];
-    if (kind) {
-      // A removed paragraph break is layout, not text: it is not drawn.
-      if (op !== -1) out.push({ mark: kind });
+    const cell = kind ? null : CELL.exec(text);
+    if (kind || cell) {
+      // A removed break is layout, not text: it is not drawn.
+      if (op !== -1) out.push(kind ? { mark: kind } : { mark: 'cell', cols: Number(cell![1] || 1) });
       continue;
     }
     text.split(' ').forEach((word, i) => {
@@ -84,16 +100,34 @@ function items(runs: readonly DiffRun[]): Item[] {
   return out;
 }
 
+/** A paragraph break: any mark but a cell's. */
+const isBreak = (x: Item): x is { mark: Kind } => x.mark !== null && x.mark !== 'cell';
+
 function paragraphsOf(stream: readonly Item[], kind: Kind = 'p'): Paragraph[] {
   const out: Paragraph[] = [];
-  let cur: Paragraph = { kind, spans: [] };
+  const start = (k: Kind): Paragraph => (k === 'row' ? { kind: k, spans: [], cells: [] } : { kind: k, spans: [] });
+  let cur = start(kind);
+  let fresh = true; // the next word starts a span of its own (a new cell)
   for (const it of stream) {
-    if (it.mark !== null) {
-      if (cur.spans.length > 0) out.push(cur);
-      cur = { kind: it.mark, spans: [] };
+    if (it.mark === 'cell') {
+      if (cur.kind !== 'row') {
+        if (cur.spans.length > 0) out.push(cur);
+        cur = start('row');
+      }
+      cur.cells!.push({ cols: it.cols, start: cur.spans.length });
+      fresh = true;
       continue;
     }
-    const last = cur.spans.at(-1);
+    if (it.mark !== null) {
+      if (cur.spans.length > 0 || (cur.cells?.length ?? 0) > 0) out.push(cur);
+      cur = start(it.mark);
+      fresh = true;
+      continue;
+    }
+    // A row cut by a passage's start: its words so far are one cell.
+    if (cur.kind === 'row' && cur.cells!.length === 0) cur.cells!.push({ cols: 1, start: 0 });
+    const last = fresh ? undefined : cur.spans.at(-1);
+    fresh = false;
     if (last && last.op === it.op && last.style === it.style && it.passage === undefined && !(it.style & GLUE)) {
       last.text += ` ${it.word}`;
     } else {
@@ -105,7 +139,7 @@ function paragraphsOf(stream: readonly Item[], kind: Kind = 'p'): Paragraph[] {
       });
     }
   }
-  if (cur.spans.length > 0) out.push(cur);
+  if (cur.spans.length > 0 || (cur.cells?.length ?? 0) > 0) out.push(cur);
   return out;
 }
 
@@ -114,24 +148,33 @@ export function paragraphs(runs: readonly DiffRun[]): Paragraph[] {
   return paragraphsOf(items(runs));
 }
 
-/** Each changed passage with up to `context` unchanged words either side, kept within its paragraph. */
+/**
+ * Each changed passage with up to `context` unchanged words either side, kept within its
+ * paragraph. In a table it is the whole of the changed rows, with the table's first row (its
+ * header, usually) as `head`: a number means little without its column.
+ */
 export function passages(runs: readonly DiffRun[], context = 25): Passage[] {
   const stream = items(runs);
-  // The heading each item falls under, and the kind of paragraph each is in.
+  // The heading each item falls under, the kind of paragraph each is in, and for a table row
+  // where its table's first row starts.
   const section: (string | null)[] = [];
   const kindAt: Kind[] = [];
+  const tableAt: number[] = [];
   let current: string | null = null;
   let collecting: string[] | null = null;
   let kind: Kind = 'p';
-  for (const it of stream) {
-    if (it.mark !== null) {
+  let table = -1;
+  stream.forEach((it, n) => {
+    if (isBreak(it)) {
       if (collecting) current = collecting.join(' ');
       collecting = it.mark === 'h' ? [] : null;
+      if (it.mark === 'row' && kind !== 'row') table = n;
       kind = it.mark;
-    } else if (collecting && it.op !== -1) collecting.push(it.word);
+    } else if (collecting && it.mark === null && it.op !== -1) collecting.push(it.word);
     section.push(current);
     kindAt.push(kind);
-  }
+    tableAt.push(kind === 'row' ? table : -1);
+  });
   const isChange = (x: Item | undefined): x is Word => x !== undefined && x.mark === null && x.op !== 0;
   const out: Passage[] = [];
   let i = 0;
@@ -148,30 +191,40 @@ export function passages(runs: readonly DiffRun[], context = 25): Passage[] {
       if (x.mark === null && x.passage !== undefined) break;
       if (isChange(x)) end = j;
     }
+    const inRow = (k: number) => kindAt[k] === 'row';
     let start = i;
-    for (let n = 0; start > 0 && n < context;) {
+    for (let n = 0; start > 0 && (n < context || inRow(start));) {
       const x = stream[start - 1]!;
-      if (x.mark !== null || x.op !== 0) break;
+      if (isBreak(x) || (x.mark === null && x.op !== 0)) break;
       start -= 1;
-      if (!(x.style & GLUE)) n += 1;
+      if (x.mark === null && !(x.style & GLUE)) n += 1;
     }
     let stop = end + 1;
-    for (let n = 0; stop < stream.length && n < context;) {
+    for (let n = 0; stop < stream.length && (n < context || inRow(end));) {
       const x = stream[stop]!;
-      if (x.mark !== null || x.passage !== undefined) break;
+      if (isBreak(x) || (x.mark === null && x.passage !== undefined)) break;
       stop += 1;
-      if (!(x.style & GLUE)) n += 1;
+      if (x.mark === null && !(x.style & GLUE)) n += 1;
     }
     const slice = stream.slice(start, stop);
     const words = slice.filter((x): x is Word => x.mark === null && !(x.style & GLUE));
     const before = start > 0 ? stream[start - 1] : undefined;
     const after = stop < stream.length ? stream[stop] : undefined;
+    // The table's first row, when the passage starts below it.
+    let head: Paragraph | undefined;
+    const t = tableAt[i] ?? -1;
+    if (t >= 0 && t < start - 1) {
+      let e = t + 1;
+      while (e < stream.length && !isBreak(stream[e]!)) e += 1;
+      if (e < start) head = paragraphsOf(stream.slice(t, e))[0];
+    }
     out.push({
       number: it.passage,
       section: section[i] ?? null,
-      cutStart: before !== undefined && before.mark === null,
-      cutEnd: after !== undefined && after.mark === null,
-      paragraphs: paragraphsOf(slice, slice[0]?.mark === null ? (kindAt[start] ?? 'p') : 'p'),
+      cutStart: before !== undefined && !isBreak(before) && !inRow(start),
+      cutEnd: after !== undefined && !isBreak(after) && !inRow(end),
+      ...(head ? { head } : {}),
+      paragraphs: paragraphsOf(slice, slice[0] && !isBreak(slice[0]) ? (kindAt[start] ?? 'p') : 'p'),
       added: words.filter((x) => x.op === 1).length,
       removed: words.filter((x) => x.op === -1).length,
     });
@@ -202,25 +255,60 @@ function spanHtml(s: Span, anchors: boolean): string {
   return `<${tag}${id}>${h}</${tag}>`;
 }
 
-const TAGS: Record<Kind, [string, string]> = {
+const TAGS: Record<Exclude<Kind, 'row'>, [string, string]> = {
   p: ['<p>', '</p>'],
   h: ['<h4>', '</h4>'],
   eq: ['<p class="eq">', '</p>'],
   cap: ['<p class="cap">', '</p>'],
 };
 
-/** Paragraphs as HTML: headings in the paper's small caps, changes struck or marked. */
-export function paragraphsHtml(
-  ps: readonly Paragraph[],
-  { anchors = false, cutStart = false, cutEnd = false } = {},
-): string {
-  return ps
-    .map((p, i) => {
-      const body = p.spans.map((s, k) => (k > 0 && !(s.style & GLUE) ? ' ' : '') + spanHtml(s, anchors)).join('');
-      const [open, close] = TAGS[p.kind];
-      return `${open}${cutStart && i === 0 ? '… ' : ''}${body}${cutEnd && i === ps.length - 1 ? ' …' : ''}${close}`;
+function spansHtml(spans: readonly Span[], anchors: boolean): string {
+  return spans.map((s, k) => (k > 0 && !(s.style & GLUE) ? ' ' : '') + spanHtml(s, anchors)).join('');
+}
+
+function rowHtml(p: Paragraph, anchors: boolean, cls = ''): string {
+  const cells = p.cells?.length ? p.cells : [{ cols: 1, start: 0 }];
+  const tds = cells
+    .map((c, k) => {
+      const body = spansHtml(p.spans.slice(c.start, cells[k + 1]?.start ?? p.spans.length), anchors);
+      return `<td${c.cols > 1 ? ` colspan="${c.cols}"` : ''}>${body}</td>`;
     })
     .join('');
+  return `<tr${cls ? ` class="${cls}"` : ''}>${tds}</tr>`;
+}
+
+/**
+ * Paragraphs as HTML: headings in the paper's small caps, tables as tables, changes struck or
+ * marked. `head` is a table's first row, set over the rows that follow with a gap between.
+ */
+export function paragraphsHtml(
+  ps: readonly Paragraph[],
+  {
+    anchors = false,
+    cutStart = false,
+    cutEnd = false,
+    head,
+  }: { anchors?: boolean; cutStart?: boolean; cutEnd?: boolean; head?: Paragraph } = {},
+): string {
+  let html = '';
+  let rows = '';
+  const flush = () => {
+    if (rows) html += `<div class="tab"><table><tbody>${rows}</tbody></table></div>`;
+    rows = '';
+  };
+  ps.forEach((p, i) => {
+    if (p.kind === 'row') {
+      if (!rows && i === 0 && head)
+        rows = rowHtml(head, false, 'head') + '<tr class="gap"><td colspan="99">⋯</td></tr>';
+      rows += rowHtml(p, anchors);
+      return;
+    }
+    flush();
+    const [open, close] = TAGS[p.kind];
+    html += `${open}${cutStart && i === 0 ? '… ' : ''}${spansHtml(p.spans, anchors)}${cutEnd && i === ps.length - 1 ? ' …' : ''}${close}`;
+  });
+  flush();
+  return html;
 }
 
 /** The changed passages, each under its section, linked to its place in the whole text. */
@@ -234,7 +322,7 @@ export function passagesHtml(ps: readonly Passage[], wholeHref: (n: number) => s
       return (
         `<li id="${passageAnchor(x.number)}"><div class="meta"><span>#${x.number} · ${esc(x.section ?? 'Front matter')}</span>` +
         `<span>${counts}<a href="${esc(wholeHref(x.number))}">in the text ↓</a></span></div>` +
-        paragraphsHtml(x.paragraphs, { cutStart: x.cutStart, cutEnd: x.cutEnd }) +
+        paragraphsHtml(x.paragraphs, { cutStart: x.cutStart, cutEnd: x.cutEnd, ...(x.head ? { head: x.head } : {}) }) +
         '</li>'
       );
     })
