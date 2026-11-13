@@ -1364,6 +1364,48 @@ export const ListingReviews = z
   .object({ listingId: Id, reviews: z.array(ListingReviewEntry) })
   .meta({ id: 'ListingReviews' });
 
+const RevisionText = z.string().max(4000);
+
+export const RevisionHunk = z
+  .object({
+    section: z.string().max(200).nullable(),
+    before: RevisionText,
+    removed: RevisionText,
+    added: RevisionText,
+    after: RevisionText,
+    truncated: z.boolean(),
+  })
+  .meta({ id: 'RevisionHunk' });
+
+const WordCount = z.number().int().min(0);
+
+export const SetRevisionRequest = z
+  .object({
+    versionRef: z.string().min(1).max(500).meta({ description: 'The source’s name for the current version. Opaque.' }),
+    revisedAt: Timestamp.meta({ description: 'When the source last changed the listing.' }),
+    currentUrl: z.url().max(2000).nullish(),
+    historyUrl: z.url().max(2000).nullish(),
+    wordsBefore: WordCount,
+    wordsAfter: WordCount,
+    wordsAdded: WordCount,
+    wordsRemoved: WordCount,
+    passages: WordCount.meta({ description: 'Changed passages in all; `hunks` may hold fewer.' }),
+    hunks: z
+      .array(RevisionHunk)
+      .max(500)
+      .meta({ description: 'The changed passages, in document order, each cut short by the supplier.' }),
+  })
+  .meta({ id: 'SetRevisionRequest' });
+
+export const ListingRevision = z
+  .object({
+    listingId: Id,
+    revision: SetRevisionRequest.extend({ updatedAt: Timestamp })
+      .nullable()
+      .meta({ description: '`null` while the document is as submitted, or nothing is known.' }),
+  })
+  .meta({ id: 'ListingRevision' });
+
 export const SetRelatedRequest = z
   .object({
     related: z

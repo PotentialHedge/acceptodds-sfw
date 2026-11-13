@@ -357,6 +357,56 @@ export interface ListingReviewSection {
 export type ListingReview = typeof listingReviews.$inferSelect;
 
 /**
+ * What changed in a listing's document since it was submitted (for a paper, its PDF on
+ * OpenReview against the submitted version), supplied whole by `../research`
+ * (`scraper/revisions.py`, `PUT /listings/{id}/revision`) and written only by
+ * `server/revisions.ts`. One row per listing: the latest version against the first.
+ *
+ * Only a diff is kept, never the document: the passages are cut short by the supplier,
+ * and the page links both versions at the source.
+ */
+export const listingRevisions = pgTable('listing_revisions', {
+  listingId: uuid('listing_id')
+    .primaryKey()
+    .references(() => listings.id, { onDelete: 'cascade' }),
+  /** The source's name for the current version (OpenReview: `/pdf/<hex>.pdf`). Opaque. */
+  versionRef: text('version_ref').notNull(),
+  /** When the source last changed the listing, at or after the new version arrived. */
+  revisedAt: timestamp('revised_at', { withTimezone: true, mode: 'date' }).notNull(),
+  /** The current version at the source. */
+  currentUrl: text('current_url'),
+  /** Every version at the source. */
+  historyUrl: text('history_url'),
+  wordsBefore: integer('words_before').notNull(),
+  wordsAfter: integer('words_after').notNull(),
+  wordsAdded: integer('words_added').notNull(),
+  wordsRemoved: integer('words_removed').notNull(),
+  /** Changed passages in all; `hunks` may hold fewer. */
+  passages: integer('passages').notNull(),
+  /** In document order. Text is plain and untrusted. */
+  hunks: jsonb('hunks')
+    .$type<ListingRevisionHunk[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+});
+
+export interface ListingRevisionHunk {
+  /** Where in the new version it is, e.g. `§ 4.2` or `References`. */
+  section: string | null;
+  /** Unchanged words just before and after it, from the new version. */
+  before: string;
+  after: string;
+  /** What the submitted version said there, and what the current one says; either may be empty. */
+  removed: string;
+  added: string;
+  /** Either side was cut short by the supplier. */
+  truncated: boolean;
+}
+
+export type ListingRevision = typeof listingRevisions.$inferSelect;
+
+/**
  * A listing's bibliography (#38): what the paper cites, in its own order,
  * supplied whole by `../research` with the listing (`POST /listings`
  * replaces the list) and written only by `server/listings.ts`, in the

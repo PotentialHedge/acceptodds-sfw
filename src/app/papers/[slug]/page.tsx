@@ -9,6 +9,8 @@ import { groupsOf } from '@/server/groups';
 import { FollowStar } from '@/components/FollowStar';
 import { PaperDiscussion } from '@/components/PaperDiscussion';
 import { PaperReviews } from '@/components/PaperReviews';
+import { PaperRevision, REVISION_ANCHOR } from '@/components/PaperRevision';
+import { revisionOf } from '@/server/revisions';
 import { PAPER_COMMENT_PAGE } from '@/lib/discussion-page';
 import { presentPaperComment } from '@/server/api/present';
 import { listPaperComments } from '@/server/discussion';
@@ -94,12 +96,13 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
     throw err;
   }
   // The minimap itself is the browser's to fetch, once it scrolls into view: here only whether there is one.
-  const [{ markets, followers }, citations, related, mapped, reviews] = await Promise.all([
+  const [{ markets, followers }, citations, related, mapped, reviews, revision] = await Promise.all([
     listingView(listing),
     listingCitations(listing),
     listingRelatedTo(listing),
     onMap(listing),
     reviewsOf(listing.id),
+    revisionOf(listing.id),
   ]);
   const reviewStanding = await reviewField(
     listing.kind,
@@ -167,6 +170,14 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
             ))}
           </div>
         )}
+        {revision && revision.passages > 0 && (
+          <p className="mt-1 text-center font-sans text-[13px] text-muted">
+            <a href={`#${REVISION_ANCHOR}`} className="hover:text-accent hover:underline">
+              Revised since submission: <span className="text-up">+{revision.wordsAdded.toLocaleString('en-US')}</span>{' '}
+              / <span className="text-down">−{revision.wordsRemoved.toLocaleString('en-US')}</span> words ↓
+            </a>
+          </p>
+        )}
         <div className="mt-2 flex flex-wrap items-center justify-center gap-4">
           <ViewCount listingId={listing.id} views={listing.viewCount} />
           {viewer && (
@@ -202,6 +213,8 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
         figure={1}
         slug={listing.slug}
       />
+
+      <PaperRevision revision={revision} />
 
       {relatedPapers}
 

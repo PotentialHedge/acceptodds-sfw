@@ -20,6 +20,7 @@ import { getComment, listComments, listMentions, listReplies, postComment } from
 import { getPaperComment, listPaperComments, listPaperReplies, postPaperComment } from '../discussion';
 import { parseEmoji, reactionsOf, setReaction } from '../reactions';
 import { reviewsOf, setReviews } from '../reviews';
+import { clearRevision, revisionOf, setRevision } from '../revisions';
 import { mailMentions } from '../mentions';
 import { follow, followedListings, setDigestOptIn, setMentionMailOptIn, unfollow } from '../follows';
 import {
@@ -278,6 +279,45 @@ export const putListingReviews = route(async (req, params) => {
   const body = await parseBody(req, S.SetReviewsRequest);
   const counts = await setReviews(listing, body.reviews);
   return respond(S.SetReviewsResult, { listingId: listing.id, ...counts }, { principal });
+});
+
+/** What changed in a listing's document since it was submitted, or `null`. Public, as the paper page is. */
+export const getListingRevision = route(async (req, params) => {
+  const principal = await authenticate(req);
+  const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
+  return respond(S.ListingRevision, presentRevision(listing.id, await revisionOf(listing.id)), { principal });
+});
+
+function presentRevision(listingId: string, r: Awaited<ReturnType<typeof revisionOf>>) {
+  const revision = r && {
+    versionRef: r.versionRef,
+    revisedAt: r.revisedAt.toISOString(),
+    currentUrl: r.currentUrl,
+    historyUrl: r.historyUrl,
+    wordsBefore: r.wordsBefore,
+    wordsAfter: r.wordsAfter,
+    wordsAdded: r.wordsAdded,
+    wordsRemoved: r.wordsRemoved,
+    passages: r.passages,
+    hunks: r.hunks,
+    updatedAt: r.updatedAt.toISOString(),
+  };
+  return { listingId, revision };
+}
+
+/** Replace (`PUT`) or clear (`DELETE`) a listing's revision diff. Written by `revisions.py`; not market state. */
+export const putListingRevision = route(async (req, params) => {
+  const principal = await requireAuth(req, 'admin');
+  const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
+  await setRevision(listing, await parseBody(req, S.SetRevisionRequest));
+  return respond(S.ListingRevision, presentRevision(listing.id, await revisionOf(listing.id)), { principal });
+});
+
+export const deleteListingRevision = route(async (req, params) => {
+  const principal = await requireAuth(req, 'admin');
+  const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
+  await clearRevision(listing);
+  return respond(S.ListingRevision, { listingId: listing.id, revision: null }, { principal });
 });
 
 /**

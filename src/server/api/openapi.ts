@@ -315,6 +315,45 @@ export function buildRegistry(): OpenAPIRegistry {
     }),
   );
 
+  r.registerPath(
+    op({
+      method: 'get',
+      path: '/listings/{id}/revision',
+      tags: ['listings'],
+      summary: 'What changed in a listing’s document since submission',
+      description:
+        'For a paper: the passages of its PDF that differ between the submitted version and the current one at OpenReview, as the listing’s publisher supplied them, each cut short, with links to both versions there. `revision` is `null` while it is as submitted.',
+      request: { params: z.object({ id: S.ListingRef }) },
+      ok: { status: 200, schema: S.ListingRevision, description: 'The diff, or `null`.' },
+      errors: { 404: 'not_found' },
+    }),
+  );
+
+  for (const method of ['put', 'delete'] as const) {
+    r.registerPath(
+      op({
+        method,
+        path: '/listings/{id}/revision',
+        tags: ['listings'],
+        summary: method === 'put' ? 'Set a listing’s revision diff' : 'Clear a listing’s revision diff',
+        description:
+          method === 'put'
+            ? 'Replaces it whole. Its own call, so a client that writes listings never clears it.'
+            : 'For a document that is as submitted again. Idempotent.',
+        scope: 'admin',
+        request:
+          method === 'put'
+            ? {
+                params: z.object({ id: S.ListingRef }),
+                body: { content: { 'application/json': { schema: S.SetRevisionRequest } } },
+              }
+            : { params: z.object({ id: S.ListingRef }) },
+        ok: { status: 200, schema: S.ListingRevision, description: 'What is stored now.' },
+        errors: method === 'put' ? { 400: 'validation_error', 404: 'not_found' } : { 404: 'not_found' },
+      }),
+    );
+  }
+
   for (const method of ['put', 'delete'] as const) {
     r.registerPath(
       op({
