@@ -1364,47 +1364,67 @@ export const ListingReviews = z
   .object({ listingId: Id, reviews: z.array(ListingReviewEntry) })
   .meta({ id: 'ListingReviews' });
 
-const RevisionText = z.string().max(4000);
-
-export const RevisionHunk = z
-  .object({
-    section: z.string().max(200).nullable(),
-    before: RevisionText,
-    removed: RevisionText,
-    added: RevisionText,
-    after: RevisionText,
-    truncated: z.boolean(),
-  })
-  .meta({ id: 'RevisionHunk' });
-
 const WordCount = z.number().int().min(0);
+const Seq = z.number().int().min(0).max(99);
 
-export const SetRevisionRequest = z
+const VersionBody = z.object({
+  ref: z.string().min(1).max(500).meta({ description: 'The source’s name for it. Opaque.' }),
+  label: z.string().min(1).max(100).meta({ example: 'Revision 1' }),
+  at: Timestamp.nullish().meta({ description: 'When the source changed to it; unknown for the first.' }),
+  seenAt: Timestamp.meta({ description: 'When the supplier first read it.' }),
+  words: WordCount,
+  url: z.url().max(2000).nullish().meta({ description: 'It at the source, when linkable.' }),
+});
+
+const DiffCounts = {
+  wordsAdded: WordCount,
+  wordsRemoved: WordCount,
+  passages: WordCount.meta({ description: 'Changed passages; changes a few words apart count as one.' }),
+};
+
+export const DiffRunBody = z
+  .tuple([z.union([z.literal(-1), z.literal(0), z.literal(1)]), z.string().max(FULL_TEXT_MAX)])
+  .meta({
+    id: 'DiffRun',
+    description:
+      '`[op, text]`: 0 in both versions, -1 only in the older, 1 only in the newer. Words are separated by spaces; a word `\\n` starts a paragraph, `\\n#` a heading.',
+  });
+
+export const SetVersionsRequest = z
   .object({
-    versionRef: z.string().min(1).max(500).meta({ description: 'The source’s name for the current version. Opaque.' }),
-    revisedAt: Timestamp.meta({ description: 'When the source last changed the listing.' }),
-    currentUrl: z.url().max(2000).nullish(),
-    historyUrl: z.url().max(2000).nullish(),
-    wordsBefore: WordCount,
-    wordsAfter: WordCount,
-    wordsAdded: WordCount,
-    wordsRemoved: WordCount,
-    passages: WordCount.meta({ description: 'Changed passages in all; `hunks` may hold fewer.' }),
-    hunks: z
-      .array(RevisionHunk)
-      .max(500)
-      .meta({ description: 'The changed passages, in document order, each cut short by the supplier.' }),
+    versions: z.array(VersionBody).max(100).meta({ description: 'Oldest first; the first is the submitted one.' }),
+    diffs: z
+      .array(
+        z.object({
+          from: Seq.meta({ description: 'Index into `versions` of the older.' }),
+          to: Seq.meta({ description: 'Index into `versions` of the newer.' }),
+          ...DiffCounts,
+          runs: z
+            .array(DiffRunBody)
+            .max(20_000)
+            .meta({ description: 'The newer text whole, with the older’s removed words in place.' }),
+        }),
+      )
+      .max(500),
   })
-  .meta({ id: 'SetRevisionRequest' });
+  .meta({ id: 'SetVersionsRequest' });
 
-export const ListingRevision = z
+export const ListingVersions = z
   .object({
     listingId: Id,
-    revision: SetRevisionRequest.extend({ updatedAt: Timestamp })
-      .nullable()
-      .meta({ description: '`null` while the document is as submitted, or nothing is known.' }),
+    versions: z.array(VersionBody.extend({ seq: Seq })),
+    diffs: z.array(z.object({ from: Seq, to: Seq, ...DiffCounts })).meta({
+      description:
+        'Every pair there is a diff for, without its text: that is `GET /listings/{id}/versions/{from}/{to}`.',
+    }),
   })
-  .meta({ id: 'ListingRevision' });
+  .meta({ id: 'ListingVersions' });
+
+export const ListingVersionDiff = z
+  .object({ listingId: Id, from: Seq, to: Seq, ...DiffCounts, runs: z.array(DiffRunBody) })
+  .meta({ id: 'ListingVersionDiff' });
+
+export const VersionSeq = z.coerce.number().int().min(0).max(99);
 
 export const SetRelatedRequest = z
   .object({

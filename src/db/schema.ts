@@ -357,54 +357,62 @@ export interface ListingReviewSection {
 export type ListingReview = typeof listingReviews.$inferSelect;
 
 /**
- * What changed in a listing's document since it was submitted (for a paper, its PDF on
- * OpenReview against the submitted version), supplied whole by `../research`
- * (`scraper/revisions.py`, `PUT /listings/{id}/revision`) and written only by
- * `server/revisions.ts`. One row per listing: the latest version against the first.
- *
- * Only a diff is kept, never the document: the passages are cut short by the supplier,
- * and the page links both versions at the source.
+ * The versions of a listing's document that its supplier has seen (for a paper, its PDF on
+ * OpenReview: 0 is the submitted one), supplied whole with the diffs between them by
+ * `../research` (`scraper/revisions.py`, `PUT /listings/{id}/versions`), and written only by
+ * `server/versions.ts`. ICLR submissions are CC BY 4.0, so the whole text may be shown.
  */
-export const listingRevisions = pgTable('listing_revisions', {
-  listingId: uuid('listing_id')
-    .primaryKey()
-    .references(() => listings.id, { onDelete: 'cascade' }),
-  /** The source's name for the current version (OpenReview: `/pdf/<hex>.pdf`). Opaque. */
-  versionRef: text('version_ref').notNull(),
-  /** When the source last changed the listing, at or after the new version arrived. */
-  revisedAt: timestamp('revised_at', { withTimezone: true, mode: 'date' }).notNull(),
-  /** The current version at the source. */
-  currentUrl: text('current_url'),
-  /** Every version at the source. */
-  historyUrl: text('history_url'),
-  wordsBefore: integer('words_before').notNull(),
-  wordsAfter: integer('words_after').notNull(),
-  wordsAdded: integer('words_added').notNull(),
-  wordsRemoved: integer('words_removed').notNull(),
-  /** Changed passages in all; `hunks` may hold fewer. */
-  passages: integer('passages').notNull(),
-  /** In document order. Text is plain and untrusted. */
-  hunks: jsonb('hunks')
-    .$type<ListingRevisionHunk[]>()
-    .notNull()
-    .default(sql`'[]'::jsonb`),
-  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
-});
+export const listingVersions = pgTable(
+  'listing_versions',
+  {
+    listingId: uuid('listing_id')
+      .notNull()
+      .references(() => listings.id, { onDelete: 'cascade' }),
+    /** 0, 1, 2, … in order; 0 is the submitted version. */
+    seq: integer('seq').notNull(),
+    /** The source's name for it (OpenReview: `/pdf/<hex>.pdf`, or `submitted`). Opaque. */
+    ref: text('ref').notNull(),
+    label: text('label').notNull(),
+    /** When the source changed the listing to it; null when unknown (the submitted one). */
+    at: timestamp('at', { withTimezone: true, mode: 'date' }),
+    /** When the supplier first read it. */
+    seenAt: timestamp('seen_at', { withTimezone: true, mode: 'date' }).notNull(),
+    words: integer('words').notNull(),
+    /** It at the source, when the source still serves it by a stable link. */
+    url: text('url'),
+  },
+  (t) => [primaryKey({ columns: [t.listingId, t.seq] })],
+);
 
-export interface ListingRevisionHunk {
-  /** Where in the new version it is, e.g. `§ 4.2` or `References`. */
-  section: string | null;
-  /** Unchanged words just before and after it, from the new version. */
-  before: string;
-  after: string;
-  /** What the submitted version said there, and what the current one says; either may be empty. */
-  removed: string;
-  added: string;
-  /** Either side was cut short by the supplier. */
-  truncated: boolean;
-}
+export type ListingVersion = typeof listingVersions.$inferSelect;
 
-export type ListingRevision = typeof listingRevisions.$inferSelect;
+/**
+ * The text of version `to_seq`, whole, as runs against version `from_seq`: `[op, text]`, 0
+ * unchanged, -1 only in the older, 1 only in the newer. In `text` a line break starts a
+ * paragraph, and a line break then `#` a heading.
+ */
+export const listingVersionDiffs = pgTable(
+  'listing_version_diffs',
+  {
+    listingId: uuid('listing_id')
+      .notNull()
+      .references(() => listings.id, { onDelete: 'cascade' }),
+    fromSeq: integer('from_seq').notNull(),
+    toSeq: integer('to_seq').notNull(),
+    wordsAdded: integer('words_added').notNull(),
+    wordsRemoved: integer('words_removed').notNull(),
+    /** Changed passages: changes fewer than a few words apart count as one. */
+    passages: integer('passages').notNull(),
+    runs: jsonb('runs').$type<DiffRun[]>().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.listingId, t.fromSeq, t.toSeq] }),
+    check('listing_version_diffs_order_check', sql`${t.fromSeq} < ${t.toSeq}`),
+  ],
+);
+
+export type DiffRun = [op: -1 | 0 | 1, text: string];
+export type ListingVersionDiff = typeof listingVersionDiffs.$inferSelect;
 
 /**
  * A listing's bibliography (#38): what the paper cites, in its own order,

@@ -1,5 +1,5 @@
 {
-  "id": "4dcd6539-424c-40ca-9e31-4d4b648cffef",
+  "id": "000121eb-7827-4471-b496-96dc4779d664",
   "prevId": "220d0fe2-9362-40b1-8622-8720d218460c",
   "version": "7",
   "dialect": "postgresql",
@@ -2294,107 +2294,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.listing_revisions": {
-      "name": "listing_revisions",
-      "schema": "",
-      "columns": {
-        "listing_id": {
-          "name": "listing_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "version_ref": {
-          "name": "version_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "revised_at": {
-          "name": "revised_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "current_url": {
-          "name": "current_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "history_url": {
-          "name": "history_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "words_before": {
-          "name": "words_before",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "words_after": {
-          "name": "words_after",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "words_added": {
-          "name": "words_added",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "words_removed": {
-          "name": "words_removed",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "passages": {
-          "name": "passages",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "hunks": {
-          "name": "hunks",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "listing_revisions_listing_id_listings_id_fk": {
-          "name": "listing_revisions_listing_id_listings_id_fk",
-          "tableFrom": "listing_revisions",
-          "tableTo": "listings",
-          "columnsFrom": [
-            "listing_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.listing_texts": {
       "name": "listing_texts",
       "schema": "",
@@ -2505,6 +2404,172 @@
           "columns": [
             "from_listing_id",
             "to_listing_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.listing_version_diffs": {
+      "name": "listing_version_diffs",
+      "schema": "",
+      "columns": {
+        "listing_id": {
+          "name": "listing_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_seq": {
+          "name": "from_seq",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_seq": {
+          "name": "to_seq",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "words_added": {
+          "name": "words_added",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "words_removed": {
+          "name": "words_removed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "passages": {
+          "name": "passages",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "runs": {
+          "name": "runs",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "listing_version_diffs_listing_id_listings_id_fk": {
+          "name": "listing_version_diffs_listing_id_listings_id_fk",
+          "tableFrom": "listing_version_diffs",
+          "tableTo": "listings",
+          "columnsFrom": [
+            "listing_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "listing_version_diffs_listing_id_from_seq_to_seq_pk": {
+          "name": "listing_version_diffs_listing_id_from_seq_to_seq_pk",
+          "columns": [
+            "listing_id",
+            "from_seq",
+            "to_seq"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "listing_version_diffs_order_check": {
+          "name": "listing_version_diffs_order_check",
+          "value": "\"listing_version_diffs\".\"from_seq\" < \"listing_version_diffs\".\"to_seq\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.listing_versions": {
+      "name": "listing_versions",
+      "schema": "",
+      "columns": {
+        "listing_id": {
+          "name": "listing_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seq": {
+          "name": "seq",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ref": {
+          "name": "ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seen_at": {
+          "name": "seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "words": {
+          "name": "words",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "listing_versions_listing_id_listings_id_fk": {
+          "name": "listing_versions_listing_id_listings_id_fk",
+          "tableFrom": "listing_versions",
+          "tableTo": "listings",
+          "columnsFrom": [
+            "listing_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "listing_versions_listing_id_seq_pk": {
+          "name": "listing_versions_listing_id_seq_pk",
+          "columns": [
+            "listing_id",
+            "seq"
           ]
         }
       },

@@ -318,41 +318,48 @@ export function buildRegistry(): OpenAPIRegistry {
   r.registerPath(
     op({
       method: 'get',
-      path: '/listings/{id}/revision',
+      path: '/listings/{id}/versions',
       tags: ['listings'],
-      summary: 'What changed in a listing’s document since submission',
+      summary: 'A listing’s document versions',
       description:
-        'For a paper: the passages of its PDF that differ between the submitted version and the current one at OpenReview, as the listing’s publisher supplied them, each cut short, with links to both versions there. `revision` is `null` while it is as submitted.',
+        'For a paper: each version of its PDF the listing’s publisher has read at OpenReview, the submitted one first, and the counts of every diff between them. Empty while it is as submitted, or nothing is known.',
       request: { params: z.object({ id: S.ListingRef }) },
-      ok: { status: 200, schema: S.ListingRevision, description: 'The diff, or `null`.' },
+      ok: { status: 200, schema: S.ListingVersions, description: 'The versions and diffs.' },
       errors: { 404: 'not_found' },
     }),
   );
 
-  for (const method of ['put', 'delete'] as const) {
-    r.registerPath(
-      op({
-        method,
-        path: '/listings/{id}/revision',
-        tags: ['listings'],
-        summary: method === 'put' ? 'Set a listing’s revision diff' : 'Clear a listing’s revision diff',
-        description:
-          method === 'put'
-            ? 'Replaces it whole. Its own call, so a client that writes listings never clears it.'
-            : 'For a document that is as submitted again. Idempotent.',
-        scope: 'admin',
-        request:
-          method === 'put'
-            ? {
-                params: z.object({ id: S.ListingRef }),
-                body: { content: { 'application/json': { schema: S.SetRevisionRequest } } },
-              }
-            : { params: z.object({ id: S.ListingRef }) },
-        ok: { status: 200, schema: S.ListingRevision, description: 'What is stored now.' },
-        errors: method === 'put' ? { 400: 'validation_error', 404: 'not_found' } : { 404: 'not_found' },
-      }),
-    );
-  }
+  r.registerPath(
+    op({
+      method: 'get',
+      path: '/listings/{id}/versions/{from}/{to}',
+      tags: ['listings'],
+      summary: 'The diff between two versions of a listing’s document',
+      description:
+        'The newer version’s text whole, as extracted from its PDF, with the older’s removed words in place. Papers at ICLR are CC BY 4.0, by their authors.',
+      request: { params: z.object({ id: S.ListingRef, from: S.VersionSeq, to: S.VersionSeq }) },
+      ok: { status: 200, schema: S.ListingVersionDiff, description: 'The diff.' },
+      errors: { 400: 'validation_error', 404: 'not_found' },
+    }),
+  );
+
+  r.registerPath(
+    op({
+      method: 'put',
+      path: '/listings/{id}/versions',
+      tags: ['listings'],
+      summary: 'Set a listing’s document versions',
+      description:
+        'Replaces the versions and diffs whole; empty clears them. Its own call, so a client that writes listings never clears them.',
+      scope: 'admin',
+      request: {
+        params: z.object({ id: S.ListingRef }),
+        body: { content: { 'application/json': { schema: S.SetVersionsRequest } } },
+      },
+      ok: { status: 200, schema: S.ListingVersions, description: 'What is stored now, without the text.' },
+      errors: { 400: 'validation_error', 404: 'not_found' },
+    }),
+  );
 
   for (const method of ['put', 'delete'] as const) {
     r.registerPath(

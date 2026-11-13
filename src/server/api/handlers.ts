@@ -20,7 +20,7 @@ import { getComment, listComments, listMentions, listReplies, postComment } from
 import { getPaperComment, listPaperComments, listPaperReplies, postPaperComment } from '../discussion';
 import { parseEmoji, reactionsOf, setReaction } from '../reactions';
 import { reviewsOf, setReviews } from '../reviews';
-import { clearRevision, revisionOf, setRevision } from '../revisions';
+import { setVersions, versionDiff, versionsOf } from '../versions';
 import { mailMentions } from '../mentions';
 import { follow, followedListings, setDigestOptIn, setMentionMailOptIn, unfollow } from '../follows';
 import {
@@ -281,43 +281,65 @@ export const putListingReviews = route(async (req, params) => {
   return respond(S.SetReviewsResult, { listingId: listing.id, ...counts }, { principal });
 });
 
-/** What changed in a listing's document since it was submitted, or `null`. Public, as the paper page is. */
-export const getListingRevision = route(async (req, params) => {
+/** A listing's document versions and the counts of the diffs between them. Public, as the diff page is. */
+export const getListingVersions = route(async (req, params) => {
   const principal = await authenticate(req);
   const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
-  return respond(S.ListingRevision, presentRevision(listing.id, await revisionOf(listing.id)), { principal });
+  return respond(S.ListingVersions, await presentVersions(listing.id), { principal });
 });
 
-function presentRevision(listingId: string, r: Awaited<ReturnType<typeof revisionOf>>) {
-  const revision = r && {
-    versionRef: r.versionRef,
-    revisedAt: r.revisedAt.toISOString(),
-    currentUrl: r.currentUrl,
-    historyUrl: r.historyUrl,
-    wordsBefore: r.wordsBefore,
-    wordsAfter: r.wordsAfter,
-    wordsAdded: r.wordsAdded,
-    wordsRemoved: r.wordsRemoved,
-    passages: r.passages,
-    hunks: r.hunks,
-    updatedAt: r.updatedAt.toISOString(),
+async function presentVersions(listingId: string) {
+  const { versions, diffs } = await versionsOf(listingId);
+  return {
+    listingId,
+    versions: versions.map((v) => ({
+      seq: v.seq,
+      ref: v.ref,
+      label: v.label,
+      at: toIsoOrNull(v.at),
+      seenAt: v.seenAt.toISOString(),
+      words: v.words,
+      url: v.url,
+    })),
+    diffs: diffs.map((d) => ({
+      from: d.fromSeq,
+      to: d.toSeq,
+      wordsAdded: d.wordsAdded,
+      wordsRemoved: d.wordsRemoved,
+      passages: d.passages,
+    })),
   };
-  return { listingId, revision };
 }
 
-/** Replace (`PUT`) or clear (`DELETE`) a listing's revision diff. Written by `revisions.py`; not market state. */
-export const putListingRevision = route(async (req, params) => {
-  const principal = await requireAuth(req, 'admin');
+/** One diff between two versions, whole. */
+export const getListingVersionDiff = route(async (req, params) => {
+  const principal = await authenticate(req);
   const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
-  await setRevision(listing, await parseBody(req, S.SetRevisionRequest));
-  return respond(S.ListingRevision, presentRevision(listing.id, await revisionOf(listing.id)), { principal });
+  const from = parseParam(params.from, S.VersionSeq, 'from');
+  const to = parseParam(params.to, S.VersionSeq, 'to');
+  const d = await versionDiff(listing.id, from, to);
+  if (!d) throw new ApiError(404, 'not_found', `no diff from version ${from} to ${to}`);
+  return respond(
+    S.ListingVersionDiff,
+    {
+      listingId: listing.id,
+      from,
+      to,
+      wordsAdded: d.wordsAdded,
+      wordsRemoved: d.wordsRemoved,
+      passages: d.passages,
+      runs: d.runs,
+    },
+    { principal },
+  );
 });
 
-export const deleteListingRevision = route(async (req, params) => {
+/** Replace a listing's versions and diffs, whole; empty clears them. Written by `revisions.py`; not market state. */
+export const putListingVersions = route(async (req, params) => {
   const principal = await requireAuth(req, 'admin');
   const listing = await resolveListing(parseParam(params.id, S.ListingRef, 'id'));
-  await clearRevision(listing);
-  return respond(S.ListingRevision, { listingId: listing.id, revision: null }, { principal });
+  await setVersions(listing, await parseBody(req, S.SetVersionsRequest));
+  return respond(S.ListingVersions, await presentVersions(listing.id), { principal });
 });
 
 /**

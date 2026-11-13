@@ -1,5 +1,6 @@
 import { readingGroupIdsForListing, readingStatuses } from '@/server/reading';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { Citations } from '@/components/Citations';
@@ -9,8 +10,7 @@ import { groupsOf } from '@/server/groups';
 import { FollowStar } from '@/components/FollowStar';
 import { PaperDiscussion } from '@/components/PaperDiscussion';
 import { PaperReviews } from '@/components/PaperReviews';
-import { PaperRevision, REVISION_ANCHOR } from '@/components/PaperRevision';
-import { revisionOf } from '@/server/revisions';
+import { versionsOf } from '@/server/versions';
 import { PAPER_COMMENT_PAGE } from '@/lib/discussion-page';
 import { presentPaperComment } from '@/server/api/present';
 import { listPaperComments } from '@/server/discussion';
@@ -96,13 +96,13 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
     throw err;
   }
   // The minimap itself is the browser's to fetch, once it scrolls into view: here only whether there is one.
-  const [{ markets, followers }, citations, related, mapped, reviews, revision] = await Promise.all([
+  const [{ markets, followers }, citations, related, mapped, reviews, versions] = await Promise.all([
     listingView(listing),
     listingCitations(listing),
     listingRelatedTo(listing),
     onMap(listing),
     reviewsOf(listing.id),
-    revisionOf(listing.id),
+    versionsOf(listing.id),
   ]);
   const reviewStanding = await reviewField(
     listing.kind,
@@ -119,6 +119,10 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
     readingStatuses([listing.id], viewer?.account.id ?? null),
     listPaperComments(listing.id, { limit: PAPER_COMMENT_PAGE, viewerAccountId: viewer?.account.id ?? null }),
   ]);
+  // The latest version against the submitted one, when the paper has been revised.
+  const latest = versions.versions.at(-1);
+  const sinceSubmission =
+    latest && latest.seq > 0 ? versions.diffs.find((d) => d.fromSeq === 0 && d.toSeq === latest.seq) : undefined;
   const main = markets[0];
   const venueOf = listing.kind ?? main?.market.kind ?? null;
   events.log('listing.read', { accountId: viewer?.account.id ?? null });
@@ -170,12 +174,17 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
             ))}
           </div>
         )}
-        {revision && revision.passages > 0 && (
+        {sinceSubmission && (
           <p className="mt-1 text-center font-sans text-[13px] text-muted">
-            <a href={`#${REVISION_ANCHOR}`} className="hover:text-accent hover:underline">
-              Revised since submission: <span className="text-up">+{revision.wordsAdded.toLocaleString('en-US')}</span>{' '}
-              / <span className="text-down">−{revision.wordsRemoved.toLocaleString('en-US')}</span> words ↓
-            </a>
+            <Link
+              href={`/papers/${encodeURIComponent(listing.slug)}/diff`}
+              className="hover:text-accent hover:underline"
+            >
+              Revised since submission:{' '}
+              <span className="text-up">+{sinceSubmission.wordsAdded.toLocaleString('en-US')}</span> /{' '}
+              <span className="text-down">−{sinceSubmission.wordsRemoved.toLocaleString('en-US')}</span> words · see the
+              changes →
+            </Link>
           </p>
         )}
         <div className="mt-2 flex flex-wrap items-center justify-center gap-4">
@@ -213,8 +222,6 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
         figure={1}
         slug={listing.slug}
       />
-
-      <PaperRevision revision={revision} />
 
       {relatedPapers}
 
