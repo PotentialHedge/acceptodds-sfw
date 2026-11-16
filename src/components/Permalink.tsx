@@ -7,7 +7,7 @@ import { track } from '@/lib/track';
 
 /**
  * A link to `#anchor` on this page, marked with a chain icon. A plain click also copies the full URL and
- * shows a tick for a moment; the link still goes to the anchor, so the address bar shows it too. Clicks
+ * shows a tick and "Link copied" for a moment; the link still goes to the anchor, so the address bar shows it too. Clicks
  * with a modifier (new tab, etc.) are left to the browser.
  */
 export function Permalink({ anchor, kind, children }: { anchor: string; kind: string; children: ReactNode }) {
@@ -34,7 +34,7 @@ export function Permalink({ anchor, kind, children }: { anchor: string; kind: st
       ) : (
         <LinkIcon className="size-[1em] self-center" />
       )}
-      <span className="sr-only" aria-live="polite">
+      <span aria-live="polite" className="text-accent empty:hidden">
         {copied ? 'Link copied' : ''}
       </span>
     </a>

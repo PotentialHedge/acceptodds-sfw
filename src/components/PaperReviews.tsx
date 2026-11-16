@@ -58,7 +58,7 @@ export function PaperReviews({
         >
           <Heading item={review} anchor={reviewAnchor(review.externalId)} source={sourceUrl} />
           <Scores item={review} />
-          <ReviewCollapsed summary="Read review">
+          <ReviewCollapsed anchor={reviewAnchor(review.externalId)} summary="Read review">
             <Sections item={review} />
           </ReviewCollapsed>
           <Comments comments={comments} source={sourceUrl} on="review" />
