@@ -86,6 +86,28 @@ describe('PUT and GET /listings/{id}/reviews', () => {
     await setReviews(l, [{ externalId: 'c', kind: 'comment', rating: 4 }]);
     expect((await reviewsOf(l.id))[0].rating).toBeNull();
   });
+
+  it('keeps a review’s score changes, returns them, and keeps none on a comment', async () => {
+    const l = await paper('p1');
+    const admin = await trader('adm', ['read', 'admin']);
+    const change = { label: 'Rating', from: 3, at: '2026-11-16T10:51:17Z' };
+    const body = {
+      reviews: [
+        { externalId: 'r1', kind: 'review', rating: 4, scoreChanges: [change] },
+        { externalId: 'r2', kind: 'review', rating: 2 },
+        { externalId: 'c1', kind: 'comment', replyTo: 'r1', scoreChanges: [change] },
+      ],
+    };
+    expect((await api('PUT', `/listings/${l.id}/reviews`, { token: admin.token, body })).status).toBe(200);
+    const got = await api('GET', `/listings/${l.id}/reviews`);
+    expect(Object.fromEntries(got.body.reviews.map((r: any) => [r.externalId, r.scoreChanges]))).toEqual({
+      r1: [change],
+      r2: [],
+      c1: [],
+    });
+    const bad = { reviews: [{ externalId: 'r1', kind: 'review', scoreChanges: [{ label: 'Rating', from: 3 }] }] };
+    expect((await api('PUT', `/listings/${l.id}/reviews`, { token: admin.token, body: bad })).status).toBe(400);
+  });
 });
 
 describe('reviewField', () => {

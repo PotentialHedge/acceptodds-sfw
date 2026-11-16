@@ -264,6 +264,7 @@ export const getListingReviews = route(async (req, params) => {
     title: r.title,
     rating: r.rating,
     scores: r.scores,
+    scoreChanges: r.scoreChanges,
     sections: r.sections,
     license: r.license,
     postedAt: toIsoOrNull(r.postedAt),

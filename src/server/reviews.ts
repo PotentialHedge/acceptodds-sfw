@@ -5,6 +5,7 @@ import {
   type Listing,
   type ListingReview,
   type ListingReviewScore,
+  type ListingReviewScoreChange,
   type ListingReviewSection,
 } from '@/db/schema';
 
@@ -16,6 +17,7 @@ export interface ReviewInput {
   title?: string | null;
   rating?: number | null;
   scores?: ListingReviewScore[];
+  scoreChanges?: ListingReviewScoreChange[];
   sections?: ListingReviewSection[];
   license?: string | null;
   postedAt?: string | null;
@@ -54,6 +56,8 @@ export async function setReviews(
         // A comment has no rating, whatever is sent: the field counts only reviews.
         rating: x.kind === 'review' ? (x.rating ?? null) : null,
         scores: x.scores ?? [],
+        // Like the rating, a comment has none.
+        scoreChanges: x.kind === 'review' ? (x.scoreChanges ?? []) : [],
         sections: x.sections ?? [],
         license: x.license ?? null,
         postedAt: x.postedAt ? new Date(x.postedAt) : null,

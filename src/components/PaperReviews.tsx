@@ -7,7 +7,7 @@ import { ui } from '@/components/ui';
 import type { ListingReview } from '@/db/schema';
 import { day } from '@/lib/format';
 import { reviewMath } from '@/lib/review-math';
-import { meanRating, OVERALL, reviewAnchor, reviewCommentAnchor, threadReviews } from '@/lib/reviews';
+import { meanRating, OVERALL, reviewAnchor, reviewCommentAnchor, scoreMove, threadReviews } from '@/lib/reviews';
 import type { ReviewField, ReviewSeries } from '@/server/review-field';
 
 /**
@@ -118,17 +118,34 @@ function noteUrl(forum: string, noteId: string): string | null {
   }
 }
 
+/**
+ * A review's scores, each with how far the reviewer has moved it since posting, `(+1)`, explained on hover.
+ * Confidence is how sure the reviewer is, not a verdict on the paper, so its move is not coloured.
+ */
 function Scores({ item }: { item: ListingReview }) {
   const scores = [...(item.rating === null ? [] : [{ label: 'Rating', value: item.rating }]), ...item.scores];
   if (scores.length === 0) return null;
+  const changes = new Map(item.scoreChanges.map((c) => [c.label, c]));
   return (
     <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 font-sans text-[13px]">
-      {scores.map((s) => (
-        <div key={s.label} className="flex gap-1">
-          <dt className="text-muted">{s.label}</dt>
-          <dd className="font-mono">{s.value}</dd>
-        </div>
-      ))}
+      {scores.map((s) => {
+        const change = changes.get(s.label);
+        const move = change ? scoreMove(s.label, s.value, change) : null;
+        const tone = !move || s.label === 'Confidence' ? 'text-muted' : move.delta > 0 ? 'text-up' : 'text-down';
+        return (
+          <div key={s.label} className="flex gap-1">
+            <dt className="text-muted">{s.label}</dt>
+            <dd className="font-mono">
+              {s.value}
+              {move && (
+                <span className={`ml-1 cursor-help ${tone}`} title={move.title}>
+                  {move.mark}
+                </span>
+              )}
+            </dd>
+          </div>
+        );
+      })}
     </dl>
   );
 }

@@ -6,6 +6,7 @@ import {
   densityCurve,
   factorMeans,
   meanRating,
+  scoreMove,
   shareBelow,
   threadReviews,
 } from '@/lib/reviews';
@@ -124,5 +125,24 @@ describe('factorMeans', () => {
 
   it('is empty without scores', () => {
     expect(factorMeans([review({})])).toEqual([]);
+  });
+});
+
+describe('scoreMove', () => {
+  const at = '2026-11-16T10:51:17Z';
+  it('marks a raise and a lowering, and explains each', () => {
+    expect(scoreMove('Rating', 5, { from: 4, at })).toEqual({
+      delta: 1,
+      mark: '(+1)',
+      title: 'The reviewer raised the rating from 4 to 5 after posting the review (first seen 16 Nov).',
+    });
+    expect(scoreMove('Soundness', 1, { from: 3, at })).toMatchObject({ delta: -2, mark: '(−2)' });
+    expect(scoreMove('Soundness', 1, { from: 3, at })!.title).toContain('lowered soundness from 3 to 1');
+  });
+  it('has no mark for a score back where it started', () => {
+    expect(scoreMove('Rating', 4, { from: 4, at })).toBeNull();
+  });
+  it('rounds away float noise', () => {
+    expect(scoreMove('Rating', 0.3, { from: 0.1, at })!.mark).toBe('(+0.2)');
   });
 });

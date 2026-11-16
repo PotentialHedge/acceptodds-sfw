@@ -3,6 +3,8 @@
  * The field itself is read in `server/review-field.ts`.
  */
 
+import { dayMonth } from '@/lib/format';
+
 /** A mean, rounded so one read in SQL and one summed here compare equal. */
 export function roundMean(x: number): number {
   return Math.round(x * 1e6) / 1e6;
@@ -188,4 +190,24 @@ export function reviewAnchor(externalId: string): string {
 /** A comment's element id under a review, which its permalink points at. */
 export function reviewCommentAnchor(externalId: string): string {
   return `comment-${externalId}`;
+}
+
+/**
+ * How a review's score moved since its supplier first recorded it: the mark beside the score, `(+1)`, and a
+ * sentence for its title. `null` when it is back where it started.
+ */
+export function scoreMove(
+  label: string,
+  to: number,
+  change: { from: number; at: string },
+): { delta: number; mark: string; title: string } | null {
+  const delta = Math.round((to - change.from) * 100) / 100;
+  if (delta === 0) return null;
+  return {
+    delta,
+    mark: `(${delta > 0 ? '+' : '−'}${Math.abs(delta)})`,
+    title:
+      `The reviewer ${delta > 0 ? 'raised' : 'lowered'} ${label === 'Rating' ? 'the rating' : label.toLowerCase()} ` +
+      `from ${change.from} to ${to} after posting the review (first seen ${dayMonth(change.at)}).`,
+  };
 }

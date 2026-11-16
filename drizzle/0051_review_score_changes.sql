@@ -1,0 +1,1 @@
+ALTER TABLE "listing_reviews" ADD COLUMN "score_changes" jsonb DEFAULT '[]'::jsonb NOT NULL;

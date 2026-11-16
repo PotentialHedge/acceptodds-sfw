@@ -322,6 +322,15 @@ export const listingReviews = pgTable(
     confidence: doublePrecision('confidence').generatedAlwaysAs(
       sql`(jsonb_path_query_first(scores, '$[*] ? (@.label == "Confidence").value'))::float8`,
     ),
+    /**
+     * `[{ label, from, at }]`: each score (`Rating` among them) that differs from the first the supplier
+     * recorded for this review, with that first value and when the current one was first seen. Empty when
+     * none changed, or none were tracked.
+     */
+    scoreChanges: jsonb('score_changes')
+      .$type<ListingReviewScoreChange[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     /** `[{ label, text }]`, in the supplier's order; `text` is Markdown and untrusted. */
     sections: jsonb('sections')
       .$type<ListingReviewSection[]>()
@@ -347,6 +356,14 @@ export const listingReviews = pgTable(
 export interface ListingReviewScore {
   label: string;
   value: number;
+}
+
+export interface ListingReviewScoreChange {
+  label: string;
+  /** The score as first recorded. */
+  from: number;
+  /** ISO time the current value was first seen: no later than one sync after the reviewer changed it. */
+  at: string;
 }
 
 export interface ListingReviewSection {

@@ -1305,6 +1305,11 @@ export const ListingText = z
   .meta({ id: 'ListingText' });
 
 const ReviewScoreBody = z.object({ label: z.string().min(1).max(100), value: z.number().finite() });
+const ReviewScoreChangeBody = z.object({
+  label: z.string().min(1).max(100).meta({ description: 'A score’s label, as in `scores`, or `Rating`.' }),
+  from: z.number().finite().meta({ description: 'The score as first recorded.' }),
+  at: Timestamp.meta({ description: 'When the current value was first seen.' }),
+});
 /** Postgres cannot store a NUL, in `text` or in `jsonb`: a 400 here, not a 500 at the insert. */
 const noNul = (x: string) => !x.includes('\0');
 const ReviewSectionBody = z.object({
@@ -1330,6 +1335,9 @@ export const SetReviewsRequest = z
             description: 'The overall score, on the venue’s own scale. A review without one is left out of the field.',
           }),
           scores: z.array(ReviewScoreBody).max(50).default([]),
+          scoreChanges: z.array(ReviewScoreChangeBody).max(50).default([]).meta({
+            description: 'Each score that differs from the first one recorded for this review. Ignored on a comment.',
+          }),
           sections: z.array(ReviewSectionBody).max(50).default([]),
           license: z.string().max(100).nullish(),
           postedAt: Timestamp.nullish(),
@@ -1354,6 +1362,7 @@ export const ListingReviewEntry = z
     title: z.string().nullable(),
     rating: z.number().nullable(),
     scores: z.array(ReviewScoreBody),
+    scoreChanges: z.array(ReviewScoreChangeBody),
     sections: z.array(ReviewSectionBody),
     license: z.string().nullable(),
     postedAt: Timestamp.nullable(),
