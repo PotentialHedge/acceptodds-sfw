@@ -52,7 +52,11 @@ export type EventName =
   // place), used (Tab in the box, or the link), and a paper opened from an example's results
   | 'search_example_shown'
   | 'search_example_used'
-  | 'search_example_result_opened';
+  | 'search_example_result_opened'
+  // a paper's reviews (`PaperReviews`): a review's text opened, a comment list opened or shown in full, by hand
+  | 'review_opened'
+  | 'review_comments_opened'
+  | 'review_comments_more';
 
 export interface EventData {
   /** A refusal or failure: the error code, never its message. */
@@ -66,10 +70,10 @@ export interface EventData {
   following?: boolean;
   signedIn?: boolean;
   /**
-   * What was copied: 'paper' | 'badge' | 'profile'; or where it was sent: 'x' | 'whatsapp'; or where the
+   * what was copied: 'paper' | 'badge' | 'profile' | 'review_link'; or where it was sent: 'x' | 'whatsapp'; or where the
    * tutorial's last button went: 'welcome' | 'close'; or where a sign-up started: 'bet' | 'open_market' |
    * 'email'; or what a Finish step did: 'bet_placed' | 'bet_skipped' | 'name' | 'password'; or what opened a
-   * market: 'click' | 'return'; or where an example search was shown or used: 'placeholder' | 'link'.
+   * market: 'click' | 'return'; or what a comment list is under: 'review' | 'paper'; or where an example search was shown or used: 'placeholder' | 'link'.
    */
   target?: string;
   /** An example search's id (`lib/search-examples.ts`), never the query someone typed. */

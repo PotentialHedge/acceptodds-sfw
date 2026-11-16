@@ -121,6 +121,25 @@ export function CheckIcon({ className = 'size-4' }: { className?: string }) {
   );
 }
 
+/** Permalink: two links of a chain. */
+export function LinkIcon({ className = 'size-[1em]' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M6.75 9.25a2.5 2.5 0 0 0 3.54 0l2.5-2.5a2.5 2.5 0 0 0-3.54-3.54l-.75.75" />
+      <path d="M9.25 6.75a2.5 2.5 0 0 0-3.54 0l-2.5 2.5a2.5 2.5 0 0 0 3.54 3.54l.75-.75" />
+    </svg>
+  );
+}
+
 /** Remove an item: a trash can. The button supplies its accessible label. */
 export function TrashIcon({ className = 'size-4' }: { className?: string }) {
   return (

@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
 import { Markdown } from '@/components/Markdown';
 import { MathText } from '@/components/MathText';
+import { Permalink } from '@/components/Permalink';
+import { ReviewCollapsed } from '@/components/ReviewCollapsed';
 import { ReviewComments } from '@/components/ReviewComments';
 import { ReviewFigure } from '@/components/ReviewStanding';
 import { ui } from '@/components/ui';
@@ -57,16 +58,16 @@ export function PaperReviews({
         >
           <Heading item={review} anchor={reviewAnchor(review.externalId)} source={sourceUrl} />
           <Scores item={review} />
-          <Collapsed summary="Read review">
+          <ReviewCollapsed summary="Read review">
             <Sections item={review} />
-          </Collapsed>
-          <Comments comments={comments} source={sourceUrl} />
+          </ReviewCollapsed>
+          <Comments comments={comments} source={sourceUrl} on="review" />
         </article>
       ))}
       {loose.length > 0 && (
         <div className="mt-5 border-t border-rule pt-3">
           <h4 className={ui.runIn}>Comments on the paper</h4>
-          <Comments comments={loose} source={sourceUrl} />
+          <Comments comments={loose} source={sourceUrl} on="paper" />
         </div>
       )}
       <p className={ui.fine}>
@@ -84,7 +85,7 @@ export function PaperReviews({
 }
 
 /**
- * Who wrote it and when; the date (or "link", undated) is the item's permalink, `#anchor`. Beside it, the item
+ * Who wrote it and when; the date (or "link", undated) is the item's permalink, `#anchor`, copied on click. Beside it, the item
  * itself on OpenReview, when the paper's forum there is known.
  */
 function Heading({ item, anchor, source }: { item: ListingReview; anchor: string; source: string | null }) {
@@ -98,9 +99,9 @@ function Heading({ item, anchor, source }: { item: ListingReview; anchor: string
             OpenReview ↗
           </a>
         )}
-        <a href={`#${anchor}`} className="hover:text-accent hover:underline" title={`Link to this ${item.kind}`}>
-          {item.postedAt ? <time>{day(item.postedAt)}</time> : 'link'} #
-        </a>
+        <Permalink anchor={anchor} kind={item.kind}>
+          {item.postedAt ? <time>{day(item.postedAt)}</time> : 'link'}
+        </Permalink>
       </span>
     </header>
   );
@@ -163,19 +164,19 @@ function Sections({ item }: { item: ListingReview }) {
   );
 }
 
-function Collapsed({ summary, children }: { summary: string; children: ReactNode }) {
-  return (
-    <details className="mt-2">
-      <summary className="cursor-pointer font-sans text-[13px] text-accent">{summary}</summary>
-      {children}
-    </details>
-  );
-}
-
-function Comments({ comments, source }: { comments: ListingReview[]; source: string | null }) {
+function Comments({
+  comments,
+  source,
+  on,
+}: {
+  comments: ListingReview[];
+  source: string | null;
+  on: 'review' | 'paper';
+}) {
   if (comments.length === 0) return null;
   return (
     <ReviewComments
+      on={on}
       ids={comments.map((c) => c.externalId)}
       items={comments.map((c) => (
         <CommentItem key={c.externalId} item={c} source={source} />

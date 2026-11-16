@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { reviewCommentAnchor } from '@/lib/reviews';
+import { track } from '@/lib/track';
 import { ui } from './ui';
 
 /** Comments shown before "Show N more". */
@@ -15,8 +16,11 @@ const SHOWN = 3;
  * A link to one of them (`#comment-<id>`, on load or later) opens the list
  * and the rest of it as far as needed, then scrolls to the comment: the
  * browser cannot, since it is hidden when the page arrives.
+ *
+ * Opening the list by hand is counted (`review_comments_opened`, `target` the review or the paper it is
+ * under), and so is "Show N more" (`review_comments_more`); a link opening it is not.
  */
-export function ReviewComments({ ids, items }: { ids: string[]; items: ReactNode[] }) {
+export function ReviewComments({ ids, items, on }: { ids: string[]; items: ReactNode[]; on: 'review' | 'paper' }) {
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState(false);
   // The comment a link asked for, scrolled to once the render that reveals it has landed.
@@ -53,12 +57,24 @@ export function ReviewComments({ ids, items }: { ids: string[]; items: ReactNode
   const hidden = items.length > SHOWN + 1 ? items.length - SHOWN : 0;
   return (
     <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)} className="mt-2">
-      <summary className="cursor-pointer font-sans text-[13px] text-accent">
+      <summary
+        className="cursor-pointer font-sans text-[13px] text-accent"
+        onClick={() => {
+          if (!open) track('review_comments_opened', { target: on });
+        }}
+      >
         {items.length === 1 ? '1 comment' : `${items.length} comments`}
       </summary>
       {all || hidden === 0 ? items : items.slice(0, SHOWN)}
       {!all && hidden > 0 && (
-        <button type="button" className={`${ui.linkBtn} mt-3 font-sans text-[13px]`} onClick={() => setAll(true)}>
+        <button
+          type="button"
+          className={`${ui.linkBtn} mt-3 font-sans text-[13px]`}
+          onClick={() => {
+            setAll(true);
+            track('review_comments_more', { target: on });
+          }}
+        >
           Show {hidden} more {hidden === 1 ? 'comment' : 'comments'}
         </button>
       )}
