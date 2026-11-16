@@ -38,8 +38,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * The link preview: the title and the abstract, and a card showing where the
- * paper's rating sits (`card.png`). A crawler has no cookie, so it reads the
- * same preview from the gate (`app/gate/route.ts`).
+ * paper's rating sits (`card.png`).
  */
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const subject = await shareSubject(decodeURIComponent((await params).slug));

@@ -1,6 +1,9 @@
 /** The platform's source code, linked from the home page's abstract. */
 export const REPO_URL = 'https://github.com/PotentialHedge/acceptodds-sfw';
 
+/** The project's X profile, linked from the home page ("Follow for updates"). */
+export const X_PROFILE_URL = 'https://x.com/uptosomestuff';
+
 /** Where an account goes after its first trade (`Fill.firstTrade`): what it bought, and a link to share. */
 export const FIRST_TRADE_PATH = '/first-trade';
 

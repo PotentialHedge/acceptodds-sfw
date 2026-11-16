@@ -34,8 +34,7 @@ const TTL_MS = 3_600_000;
 /**
  * A paper's share card, `/papers/<slug>/card.png`: its title and authors, and
  * where its mean review rating sits among the venue's papers. A paper with no
- * placed rating shows its abstract instead. Public: a crawler has no cookie,
- * and the path's `.png` keeps it clear of the gate (`proxy.ts`).
+ * placed rating shows its abstract instead. Public, so link previews can fetch it.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const slug = decodeURIComponent((await params).slug);

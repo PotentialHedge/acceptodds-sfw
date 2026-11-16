@@ -1,4 +1,3 @@
-import { ENTERED_COOKIE } from '@/lib/sfw';
 import { defaultMarketKind } from '@/lib/venue';
 import { warmReads } from './market-cache';
 import { warmHomeReads } from './views';
@@ -29,11 +28,10 @@ export function warming(): boolean {
   return w !== undefined && !w.done && Date.now() - w.since < WARMING_AT_MOST_MS;
 }
 
-/** The home page, from this server itself, past the gate. Its failure is only logged. */
+/** The home page, from this server itself. Its failure is only logged. */
 async function selfVisit(): Promise<void> {
   try {
     const res = await fetch(`http://127.0.0.1:${process.env.PORT ?? 3000}/`, {
-      headers: { cookie: `${ENTERED_COOKIE}=1` },
       signal: AbortSignal.timeout(20_000),
     });
     await res.arrayBuffer();

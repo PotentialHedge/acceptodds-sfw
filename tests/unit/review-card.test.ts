@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cardPath, previewTags } from '@/lib/preview-tags';
+import { cardPath } from '@/lib/preview-tags';
 import { cardCurve, plainText } from '@/lib/review-card';
 
 describe('plainText', () => {
@@ -25,14 +25,8 @@ describe('cardCurve', () => {
   });
 });
 
-describe('previewTags', () => {
-  it('escapes what it is given', () => {
-    const tags = previewTags({ title: '"><script>x</script>', description: 'a&b', url: 'u', image: 'i' });
-    expect(tags).not.toContain('<script>');
-    expect(tags).toContain('&quot;&gt;&lt;script&gt;');
-    expect(tags).toContain('a&amp;b');
-  });
-  it('names a path the gate lets through', () => {
+describe('cardPath', () => {
+  it('encodes the slug', () => {
     expect(cardPath('a b')).toBe('/papers/a%20b/card.png');
   });
 });

@@ -1,17 +1,7 @@
 /**
  * The safe for work edition: the papers without the markets. Shared by
- * `proxy.ts` (which runs before any route, so relative imports only) and the
- * gate's routes.
+ * `proxy.ts`, which runs before any route, so relative imports only.
  */
-
-/** Set once a visitor has gone past the gate (`/enter`); its absence shows the gate. */
-export const ENTERED_COOKIE = 'sfw_entered';
-
-/** The page asked for, from `proxy.ts` to the gate it rewrote the request to. */
-export const NEXT_HEADER = 'x-sfw-next';
-
-/** A year: the gate is shown once per browser, not once per visit. */
-export const ENTERED_MAX_AGE = 60 * 60 * 24 * 365;
 
 /**
  * Pages of the market edition with no place here. A request for one is a
@@ -19,8 +9,8 @@ export const ENTERED_MAX_AGE = 60 * 60 * 24 * 365;
  */
 export const MARKET_PAGES = ['/leaderboard', '/portfolio', '/people', '/positions', '/first-trade', '/badge', '/agent'];
 
-/** Pages of the market edition that send a visitor to the home page instead (a 307). */
-export const REDIRECT_PAGES = ['/about'];
+/** Pages that send a visitor to the home page instead (a 307): the market edition's, and the old first-visit gate's. */
+export const REDIRECT_PAGES = ['/about', '/gate', '/enter'];
 
 /**
  * API paths that trade, value or rank, or serve agents that trade: 404. A

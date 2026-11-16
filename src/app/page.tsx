@@ -20,7 +20,7 @@ import { currentAnnouncements } from '@/server/announcements';
 import { DISMISSED_COOKIE, parseDismissed } from '@/lib/announcements';
 import { Wordmark } from '@/components/Wordmark';
 import { ui } from '@/components/ui';
-import { REPO_URL } from '@/lib/links';
+import { REPO_URL, X_PROFILE_URL } from '@/lib/links';
 import { parseSearch } from '@/lib/query';
 import { normalizeSearch, SEARCH_MAX_LENGTH } from '@/lib/search';
 import { viewerFromHeaders } from '@/server/auth';
@@ -71,7 +71,17 @@ const abstract = (
       <a href="#footnote-1" id="footnote-1-ref" className="text-accent">
         1
       </a>
-    </sup>
+    </sup>{' '}
+    <a
+      href={X_PROFILE_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={ui.hyperref}
+      data-umami-event="x_follow_clicked"
+    >
+      Follow for updates
+    </a>{' '}
+    on X.
   </>
 );
 

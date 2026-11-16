@@ -49,7 +49,7 @@ one app container and one Postgres behind Traefik and Cloudflare.
 
 ```
 src/
-  proxy.ts             the first-visit gate, and 404s for paths this edition doesn't serve
+  proxy.ts             404s for paths this edition doesn't serve
   lib/                 pure helpers: formatting, search syntax, map maths, links
   db/schema.ts         Drizzle tables (db/auth-schema.ts is Better Auth's, generated)
   db/migrate.ts        migration runner
@@ -72,12 +72,6 @@ tests/integration/     real Postgres
 
 ## What a visitor sees
 
-- **A first page, once per browser.** `src/proxy.ts` shows every page as
-  the gate (`app/gate/route.ts`, with a "Take me to the Safe for work
-  edition →" button) until the browser has the `sfw_entered` cookie. The
-  button posts to `app/enter/route.ts`, which sets the cookie for a year
-  and goes on to the page first asked for. The API, `/healthz` and the
-  machine-read files (`robots.txt`, the sitemap, `llms.txt`) are never gated.
 - **The home list** sorts by `newest` (listing order) or `popular` (views),
   plus `rating` (mean review rating) within a venue, `relevance` while
   searching and `recommended` when signed in. Each row shows its paper's mean rating,
@@ -87,8 +81,7 @@ tests/integration/     real Postgres
   its citations, and a discussion.
 - **A paper's share card** (`/papers/<slug>/card.png`) shows its title, authors and
   where its mean rating sits at its venue, led by a large "Top 1%" or
-  "Bottom 12%". The gate carries the same preview
-  tags, since a crawler has no cookie to get past it.
+  "Bottom 12%".
 - **The map** (`/map`) lays out a venue's papers as the map service sent
   them, with the home page's search lighting up matches.
 - **Reading groups** have their own pages: `/groups`, linked from the
