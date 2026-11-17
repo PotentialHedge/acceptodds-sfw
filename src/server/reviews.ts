@@ -2,6 +2,7 @@ import { asc, eq, sql } from 'drizzle-orm';
 import { getDb, type Database } from '@/db';
 import {
   listingReviews,
+  listingReviewStats,
   type Listing,
   type ListingReview,
   type ListingReviewScore,
@@ -44,6 +45,8 @@ export async function setReviews(
 ): Promise<{ reviews: number; comments: number }> {
   await database.transaction(async (tx) => {
     await tx.delete(listingReviews).where(eq(listingReviews.listingId, listing.id));
+    // The summary goes with them, and comes back below from whatever was written.
+    await tx.delete(listingReviewStats).where(eq(listingReviewStats.listingId, listing.id));
     if (items.length === 0) return;
     await tx.insert(listingReviews).values(
       items.map((x) => ({
@@ -63,6 +66,14 @@ export async function setReviews(
         postedAt: x.postedAt ? new Date(x.postedAt) : null,
       })),
     );
+    // As migration 0052 first filled it: nothing when no review has a rating.
+    await tx.execute(sql`
+      insert into listing_review_stats (listing_id, mean, n, soundness, informativeness, presentation, confidence)
+      select r.listing_id, round(avg(r.rating)::numeric, 2), count(*)::int,
+             avg(r.soundness), avg(r.informativeness), avg(r.presentation), avg(r.confidence)
+        from listing_reviews r
+       where r.listing_id = ${listing.id} and r.kind = 'review' and r.rating is not null
+       group by r.listing_id`);
   });
   const reviews = items.filter((x) => x.kind === 'review').length;
   return { reviews, comments: items.length - reviews };

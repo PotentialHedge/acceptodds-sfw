@@ -17,6 +17,7 @@ import {
   timestamp,
   uniqueIndex,
   jsonb,
+  numeric,
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
@@ -372,6 +373,28 @@ export interface ListingReviewSection {
 }
 
 export type ListingReview = typeof listingReviews.$inferSelect;
+
+/**
+ * Each listing's rated reviews summed up: the `rating` sort's key, kept so the home list never aggregates
+ * every review at a venue. That aggregate spilled to disk on each read (1.1 s for ICLR 2027) and, under a
+ * search the planner guessed finds one row, was redone once per row of a nested loop: the withdrawn
+ * papers' list for a `keyword:` link ran past the statement timeout. Written only by `setReviews`
+ * (`server/reviews.ts`), in its transaction; a listing with no rated review has no row.
+ */
+export const listingReviewStats = pgTable('listing_review_stats', {
+  listingId: uuid('listing_id')
+    .primaryKey()
+    .references(() => listings.id, { onDelete: 'cascade' }),
+  /** `round(avg(rating), 2)` over its reviews with a rating. */
+  mean: numeric('mean').notNull(),
+  /** How many reviews have a rating. */
+  n: integer('n').notNull(),
+  // Each of `REVIEW_FACTORS`' mean over the same reviews; null when none gave it.
+  soundness: doublePrecision('soundness'),
+  informativeness: doublePrecision('informativeness'),
+  presentation: doublePrecision('presentation'),
+  confidence: doublePrecision('confidence'),
+});
 
 /**
  * A listing's bibliography (#38): what the paper cites, in its own order,

@@ -207,6 +207,20 @@ describe('the home list and ratings', () => {
     expect(rows.map((r) => r.reviewCount)).toEqual([2, 1, 2, 0]);
   });
 
+  it('ranks by the latest reviews after a rewrite, and an emptied listing as unreviewed', async () => {
+    const [a, b] = await Promise.all(['a', 'b'].map((s) => paper(s)));
+    await setReviews(a, [rated('x', 4)]);
+    await setReviews(b, [rated('x', 2)]);
+    await setReviews(a, [rated('x', 1)]);
+    await setReviews(b, [rated('x', 3), rated('y', 3)]);
+    let { rows } = await browseListings({ sort: 'rating', status: 'all', kind: 'ICLR 2027' }, getDb());
+    expect(rows.map((r) => r.listing?.slug)).toEqual([b.slug, a.slug]);
+    await setReviews(b, [{ externalId: 'c', kind: 'comment' }]);
+    ({ rows } = await browseListings({ sort: 'rating', status: 'all', kind: 'ICLR 2027', offset: 0 }, getDb()));
+    expect(rows.map((r) => r.listing?.slug)).toEqual([a.slug, b.slug]);
+    expect(rows.map((r) => r.reviewCount)).toEqual([1, 0]);
+  });
+
   const scored = (externalId: string, rating: number, scores: Record<string, number>) => ({
     ...rated(externalId, rating),
     scores: Object.entries(scores).map(([label, value]) => ({ label, value })),

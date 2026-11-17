@@ -1964,15 +1964,8 @@ function browseQuery(q: BrowseFilter): { from: SQL; order: SQL[]; searching: boo
       ${hits}
       ${recommending ? sql`left join ${scoresTable(recommending)} rec on rec.listing_id = l.id` : sql``}
       ${
-        q.sort === 'rating'
-          ? sql`left join (
-        select r.listing_id, round(avg(r.rating)::numeric, 2) as mean, count(*) as n,
-               ${sql.raw(REVIEW_FACTORS.map((f) => `avg(r.${f}) as ${f}`).join(', '))}
-          from listing_reviews r
-         where r.kind = 'review' and r.rating is not null
-         group by r.listing_id
-      ) rv on rv.listing_id = l.id`
-          : sql``
+        // Kept by `setReviews`, never aggregated here: see `listingReviewStats`.
+        q.sort === 'rating' ? sql`left join listing_review_stats rv on rv.listing_id = l.id` : sql``
       }
       -- Visible markets of a listing other than its main one, summed into the
       -- row. Few listings have any, and markets_secondary_idx holds just those.
