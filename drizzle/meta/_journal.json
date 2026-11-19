@@ -372,6 +372,13 @@
       "when": 1794948575064,
       "tag": "0052_listing_review_stats",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1795083408139,
+      "tag": "0053_review_initial_mean",
+      "breakpoints": true
     }
   ]
 }

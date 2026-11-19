@@ -33,6 +33,7 @@ export function PaperRow({
   tldr,
   rating,
   ratingCount = 0,
+  rankMove = null,
   venueStatus = null,
   href,
   onPick,
@@ -45,6 +46,8 @@ export function PaperRow({
   /** The mean review rating, on the venue's scale, at the row's right; nothing when null. */
   rating?: number | null;
   ratingCount?: number;
+  /** How its rank by mean rating in its venue moved since the first reviews: an arrow left of the rating. */
+  rankMove?: { was: number; now: number; of: number } | null;
   /** Its outcome at the venue, as a label: withdrawn, desk rejected, accepted…. */
   venueStatus?: VenueStatus | null;
   /** Accepted from the market edition's callers and never drawn: no prices in the safe for work edition. */
@@ -91,6 +94,7 @@ export function PaperRow({
         )}
       </span>
       <span className="font-mono text-[13px] text-muted">
+        {rating != null && rankMove && <RankMoveMark {...rankMove} />}
         {rating != null && (
           <span title={`Mean rating over ${ratingCount === 1 ? 'one review' : `${ratingCount} reviews`}`}>
             {rating.toFixed(2)}
@@ -98,6 +102,22 @@ export function PaperRow({
         )}
       </span>
     </div>
+  );
+}
+
+/** ▲ or ▼ and how many places a paper's rank by mean rating moved since the first reviews, the ranks on hover. */
+function RankMoveMark({ was, now, of }: { was: number; now: number; of: number }) {
+  const up = now < was;
+  const places = Math.abs(was - now);
+  const n = (x: number) => x.toLocaleString('en-US');
+  const title =
+    `${up ? 'Up' : 'Down'} ${n(places)} ${places === 1 ? 'place' : 'places'} since the first reviews: ` +
+    `#${n(was)} → #${n(now)} of ${n(of)} by mean rating`;
+  return (
+    <span className={`relative z-10 mr-2 cursor-help text-[11px] ${up ? 'text-up' : 'text-down'}`} title={title}>
+      {up ? '▲' : '▼'}
+      {places >= 1000 ? `${(places / 1000).toFixed(places >= 10_000 ? 0 : 1)}k` : places}
+    </span>
   );
 }
 

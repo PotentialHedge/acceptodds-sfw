@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- response bodies are checked field by field */
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { upsertListing } from '@/server/listings';
+import { setVenueStatus, upsertListing } from '@/server/listings';
 import { getDb } from '@/db';
 import { factorMeans } from '@/lib/reviews';
 import { clearReviewFieldCache, reviewFactorFields, reviewField, reviewQueryCohort } from '@/server/review-field';
+import { clearRankMovesCache, rankMoves } from '@/server/rank-moves';
 import { reviewsOf, setReviews } from '@/server/reviews';
 import { browseListings } from '@/server/views';
 import { api, trader } from './api-client';
@@ -12,6 +13,7 @@ import { closePool, resetDatabase } from './helpers';
 beforeEach(async () => {
   await resetDatabase();
   clearReviewFieldCache();
+  clearRankMovesCache();
   process.env.API_RATE_LIMIT_BURST = '1000';
   process.env.API_RATE_LIMIT_PER_SECOND = '1000';
 }, 60_000);
@@ -330,5 +332,49 @@ describe('the home list and ratings', () => {
     await setReviews(l, [rated('a', 2), rated('b', 3), rated('c', 3)]);
     const { rows } = await browseListings({ sort: 'newest', status: 'all' });
     expect(rows[0]).toMatchObject({ reviewMean: 2.666667, reviewCount: 3 });
+  });
+});
+
+describe('rank moves since the first reviews', () => {
+  const changed = (externalId: string, rating: number, from: number) => ({
+    ...rated(externalId, rating),
+    scoreChanges: [{ label: 'Rating', from, at: '2026-11-18T00:00:00Z' }],
+  });
+
+  it('ranks by the first recorded ratings and by the current, ties sharing a rank', async () => {
+    const [riser, steady, faller, tied] = await Promise.all(['riser', 'steady', 'faller', 'tied'].map((s) => paper(s)));
+    // First: faller 4, steady 3, tied 3, riser 2. Now: riser 5, steady 3, tied 3, faller 1.
+    await setReviews(riser, [changed('a', 5, 2)]);
+    await setReviews(steady, [rated('a', 3)]);
+    await setReviews(tied, [rated('a', 3), changed('b', 3, 3)]);
+    await setReviews(faller, [changed('a', 1, 4), { externalId: 'c', kind: 'comment' }]);
+    // Another venue's papers rank apart.
+    await setReviews(await paper('other', 'NeurIPS 2026'), [changed('a', 5, 1)]);
+
+    const moves = await rankMoves('ICLR 2027', getDb());
+    expect(moves.get(riser.id)).toEqual({ was: 4, now: 1, of: 4 });
+    expect(moves.get(faller.id)).toEqual({ was: 1, now: 4, of: 4 });
+    // 3 was second (tied) and is second (tied) now: no move.
+    expect(moves.has(steady.id)).toBe(false);
+    expect(moves.has(tied.id)).toBe(false);
+
+    const { rows } = await browseListings({ sort: 'rating', status: 'all', kind: 'ICLR 2027' }, getDb());
+    expect(rows.map((r) => [r.listing?.slug, r.rankMove?.now ?? null])).toEqual([
+      ['riser', 1],
+      // Tied on the mean: more reviews first.
+      ['tied', null],
+      ['steady', null],
+      ['faller', 4],
+    ]);
+  });
+
+  it('leaves out the withdrawn', async () => {
+    const [a, b] = await Promise.all(['a', 'b'].map((s) => paper(s)));
+    await setReviews(a, [changed('x', 1, 5)]);
+    await setReviews(b, [rated('x', 3)]);
+    expect((await rankMoves('ICLR 2027', getDb())).get(b.id)).toEqual({ was: 2, now: 1, of: 2 });
+    await setVenueStatus(a, 'withdrawn');
+    clearRankMovesCache();
+    expect((await rankMoves('ICLR 2027', getDb())).size).toBe(0);
   });
 });

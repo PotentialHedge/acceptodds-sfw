@@ -68,8 +68,14 @@ export async function setReviews(
     );
     // As migration 0052 first filled it: nothing when no review has a rating.
     await tx.execute(sql`
-      insert into listing_review_stats (listing_id, mean, n, soundness, informativeness, presentation, confidence)
-      select r.listing_id, round(avg(r.rating)::numeric, 2), count(*)::int,
+      insert into listing_review_stats (listing_id, mean, initial_mean, n, soundness, informativeness, presentation, confidence)
+      select r.listing_id, round(avg(r.rating)::numeric, 2),
+             -- Each review's first recorded rating (as migration 0053 filled it), else its rating.
+             round(avg(coalesce(
+               (select (c->>'from')::numeric from jsonb_array_elements(r.score_changes) c
+                 where lower(c->>'label') = 'rating' limit 1),
+               r.rating))::numeric, 2),
+             count(*)::int,
              avg(r.soundness), avg(r.informativeness), avg(r.presentation), avg(r.confidence)
         from listing_reviews r
        where r.listing_id = ${listing.id} and r.kind = 'review' and r.rating is not null

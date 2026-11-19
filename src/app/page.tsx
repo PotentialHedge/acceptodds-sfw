@@ -558,6 +558,7 @@ function Row({ r, tldr }: { r: BrowseRow; tldr: boolean }) {
       tldr={tldr ? r.listing?.tldr : null}
       rating={r.reviewMean}
       ratingCount={r.reviewCount}
+      rankMove={r.rankMove}
       venueStatus={r.listing?.venueStatus ?? null}
       href={r.listing ? `/papers/${r.listing.slug}` : `/markets/${r.main?.market.slug}`}
     />

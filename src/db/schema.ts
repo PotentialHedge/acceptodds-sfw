@@ -387,6 +387,12 @@ export const listingReviewStats = pgTable('listing_review_stats', {
     .references(() => listings.id, { onDelete: 'cascade' }),
   /** `round(avg(rating), 2)` over its reviews with a rating. */
   mean: numeric('mean').notNull(),
+  /**
+   * The same mean over each review's first recorded rating (its `Rating` score change's `from`, else
+   * its rating): where the paper stood before reviewers changed their scores. The home list's rank
+   * movement compares ranks by this and by `mean` (`server/rank-moves.ts`).
+   */
+  initialMean: numeric('initial_mean').notNull(),
   /** How many reviews have a rating. */
   n: integer('n').notNull(),
   // Each of `REVIEW_FACTORS`' mean over the same reviews; null when none gave it.

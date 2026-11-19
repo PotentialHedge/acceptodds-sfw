@@ -1,3 +1,4 @@
+import { rankMoves, type RankMove } from './rank-moves';
 import { cache } from 'react';
 import { and, asc, desc, eq, inArray, isNotNull, ne, sql, type SQL } from 'drizzle-orm';
 import { getDb, type Database } from '@/db';
@@ -1579,6 +1580,8 @@ export interface BrowseRow {
   /** The mean of the listing's review ratings on its venue's scale, and how many; null and 0 with none. */
   reviewMean: number | null;
   reviewCount: number;
+  /** How its rank by mean rating in its venue moved since the first reviews; null when it did not. */
+  rankMove: RankMove | null;
 }
 
 /** Papers out of their venue's review (`listings.venue_status`): left in, hidden, or alone. */
@@ -1756,6 +1759,9 @@ async function readBrowsePage(
   ]);
   const views = new Map((await marketViews(loadedMarkets, database)).map((v) => [v.market.id, v] as const));
   const listingById = new Map(loadedListings.map((l) => [l.id, l]));
+  const kinds = [...new Set(loadedListings.flatMap((l) => (l.kind ? [l.kind] : [])))];
+  const movesByKind = new Map(await Promise.all(kinds.map(async (k) => [k, await rankMoves(k, database)] as const)));
+  const moveOf = (l: Listing | undefined) => (l?.kind ? (movesByKind.get(l.kind)?.get(l.id) ?? null) : null);
   return {
     total,
     rows: found.map((r) => ({
@@ -1768,6 +1774,7 @@ async function readBrowsePage(
       lastTradeAt: r.last_trade_at ? new Date(r.last_trade_at) : null,
       reviewMean: ratings.get(r.listing_id ?? '')?.mean ?? null,
       reviewCount: ratings.get(r.listing_id ?? '')?.count ?? 0,
+      rankMove: moveOf(r.listing_id ? listingById.get(r.listing_id) : undefined),
     })),
   };
 }
