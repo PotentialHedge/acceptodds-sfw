@@ -38,6 +38,9 @@ COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public
 # Read at runtime from the working directory (INSTITUTION_DOMAINS_PATH overrides).
 COPY --chown=node:node config ./config
+# The share-card volume's mount point (docker-compose.prod.yml): a new named volume takes this
+# directory's owner, so the app can write to it.
+RUN mkdir /cards && chown node:node /cards
 USER node
 EXPOSE 3000
 CMD ["node", "server.js"]

@@ -31,7 +31,14 @@
 #   docker compose -f docker-compose.prod.yml --env-file .env.production --profile tools build
 #   docker compose -f docker-compose.prod.yml --env-file .env.production up -d postgres
 #   docker compose -f docker-compose.prod.yml --env-file .env.production run --rm tools
-#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d app
+#   scripts/deploy-prod.sh        # starts the new app containers beside the old, then stops the old
+#
+# `app` runs as two containers (`deploy.replicas`) that Traefik balances across:
+# under load one can fail its health check and be dropped, and with one there
+# was then no server at all (2026-11-19). The in-process caches are per
+# container, so a write seen by one reaches the other only at the cache's TTL
+# (AGENTS.md: "Two app containers"). Plain `up -d app` recreates both at once
+# and leaves no server until they are healthy: use the script.
 #
 # Migrations are their own step, never run at app start (src/db/migrate.ts).
 # `build` needs --profile tools: without it the tools image goes stale and
@@ -81,6 +88,13 @@ services:
     restart: unless-stopped
     logging: *logging
     env_file: .env.production
+    environment:
+      # Share cards drawn once per content, shared by both containers (src/server/card-store.ts).
+      CARD_CACHE_DIR: /cards
+    volumes:
+      - cards:/cards
+    deploy:
+      replicas: 2
     depends_on:
       postgres:
         condition: service_healthy
@@ -138,6 +152,7 @@ services:
 
 volumes:
   pgdata:
+  cards:
 
 networks:
   web:

@@ -7,6 +7,7 @@ import { meanRating } from '@/lib/reviews';
 import { ReadCache } from '@/server/read-cache';
 import { reviewField, type ReviewField } from '@/server/review-field';
 import { reviewsOf } from '@/server/reviews';
+import { storedCard } from '@/server/card-store';
 import { shareSubject, siteName } from '@/server/share';
 import { authorLine } from '@/components/PaperRow';
 import { standingBand } from '@/lib/leaderboard';
@@ -27,7 +28,10 @@ const HEADROOM = 10;
 
 const font = readFile(path.join(process.cwd(), 'assets/fonts/LiberationSerif-Regular.ttf'));
 
-/** Cards are drawn at most once an hour per paper: drawing is the expensive part, and it is anonymous. */
+/**
+ * Cards are looked up at most once an hour per paper and process, and drawn at most once per
+ * content (`server/card-store.ts`): drawing is the expensive part, and it is anonymous.
+ */
 const cards = new ReadCache(200);
 const TTL_MS = 3_600_000;
 
@@ -46,17 +50,34 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     const rated = reviews.flatMap((r) => (r.kind === 'review' && r.rating !== null ? [r.rating] : []));
     const mean = meanRating(rated);
     const field = await reviewField(listing.kind, mean);
-    const image = new ImageResponse(
-      <Card
-        title={plainText(listing.title)}
-        authors={authorLine(listing.authors)}
-        summary={plainText(listing.summary ?? '')}
-        venue={subject.kind}
-        placed={field && mean !== null ? { field, mean, count: rated.length } : null}
-      />,
-      { ...CARD, fonts: [{ name: 'Serif', data: await font, weight: 400, style: 'normal' }] },
-    );
-    return new Uint8Array(await image.arrayBuffer());
+    const props = {
+      title: plainText(listing.title),
+      authors: authorLine(listing.authors),
+      summary: plainText(listing.summary ?? ''),
+      venue: subject.kind,
+      placed: field && mean !== null ? { field, mean, count: rated.length } : null,
+    };
+    // What the card shows, to the pixel: the field's curve moves a little with every review in the
+    // venue, and a key on its exact values would redraw every card after every review sync.
+    const shown = {
+      ...props,
+      site: siteName(),
+      placed: props.placed && {
+        kind: props.placed.field.kind,
+        domain: props.placed.field.domain,
+        band: props.placed.field.ahead === null ? null : standingBand(props.placed.field.ahead),
+        mean: props.placed.mean.toFixed(2),
+        count: props.placed.count,
+        curve: props.placed.field.curve.map((y) => Math.round(y * 100)),
+      },
+    };
+    return storedCard(listing.id, shown, async () => {
+      const image = new ImageResponse(<Card {...props} />, {
+        ...CARD,
+        fonts: [{ name: 'Serif', data: await font, weight: 400, style: 'normal' }],
+      });
+      return new Uint8Array(await image.arrayBuffer());
+    });
   });
   return new Response(png, {
     headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=3600, s-maxage=3600' },

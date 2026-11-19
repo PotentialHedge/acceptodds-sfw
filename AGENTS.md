@@ -595,7 +595,7 @@ Each of these came up while implementing §3–§9 and is load-bearing.
 - **Better Auth's client IP header is `Cf-Connecting-Ip`**
   (`advanced.ipAddress`), via the exported `CLIENT_IP_HEADER`; its default is
   `X-Forwarded-For`. Its sign-in rate limiter uses in-memory storage, which is
-  correct for the single app container in §11 and wrong for more than one.
+  per container: with two (see "Two app containers") the limit is twice as loose.
 - **`db/auth-schema.ts` is generated** by `npm run auth:generate` (the
   `auth` CLI, reading `auth.config.ts`). Don't hand-edit it; regenerate after
   changing plugins, then `npm run db:generate`. Its timestamps are `timestamp`
@@ -1056,8 +1056,8 @@ value`, the exit quote against the basis as % or `REP` (toggled in the
   the handler is unreadable, and Next's `compress` does not touch these. `setMap`, `setRelated` and
   `upsertListing` bump its generation **after their commit**; headlines
   bump nothing and are covered by an hour's TTL, on the owner's call (the
-  map changes rarely). Like the standings cache, correct for one app
-  container only.
+  map changes rarely). Like the standings cache, per container: the other
+  one sees the write at the TTL.
 - The page fetches it anonymously and draws it in WebGL with deck.gl
   (`components/map/MapCanvas`, loaded with `ssr: false`). The display maths
   (scaling, label placement, colours) is `lib/map.ts`. `LIKELIHOOD_RGB`
@@ -1133,6 +1133,15 @@ value`, the exit quote against the basis as % or `REP` (toggled in the
   `app/robots.ts` _and_ sent `X-Robots-Tag: noindex` by `next.config.ts`
   (robots.txt stops a crawl, not an index entry). A new personal or auth
   page goes there. `robots.ts` also closes `/api/` except `openapi.json`.
+- **Share cards are closed to crawlers** (`/papers/*/card.png` in
+  `robots.ts`) but open to the link-preview bots (`PREVIEW_BOTS`), whose
+  group repeats the other rules, since a bot obeys only its most specific
+  group. A crawler walking every paper's card took the site down
+  (2026-11-19). Cards are also kept on disk (`server/card-store.ts`,
+  `CARD_CACHE_DIR`, a volume both app containers share), named by a hash of
+  what the card shows, with the field's curve rounded to a pixel so a review
+  sync elsewhere in the venue does not redraw every card; and drawn one at a
+  time per process. Bump `CARD_DESIGN` when the drawing changes.
 - `sitemap.ts`, `llms.txt` and the paper page's JSON-LD
   (`ScholarlyArticle`) read only public data (`server/seo.ts`), and
   `llms.txt` shows no value (§1.1). The sitemap has no `lastModified`: a
@@ -1621,8 +1630,7 @@ volume trades`, with aliases), `!= > < >= <=` on numbers, `"quotes"`,
   by venue and basis; an entry computed
   under an older generation is never served, including one a commit landed
   in the middle of. A 30 s TTL covers writers outside the process (the
-  seed). Correct for the single container of §11, like Better Auth's
-  limiter. A new write path that moves a balance, a share vector or who is
+  seed) and the other app container (see "Two app containers"). A new write path that moves a balance, a share vector or who is
   a trader must bump it. Not `ledger_entries.created_at` as a version: it
   is not commit order. Both bases share valuations. A bounded change journal
   refreshes only current holders plus the trader after a fill; settlement
@@ -1809,4 +1817,22 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   nearly every home page a miss; a listing upsert still drops them. The
   tests set it to 0. `traderInstitutions` is shared for a minute. Failed reads are not cached,
   in-flight invalidated reads cannot repopulate entries, and transactions
-  always bypass the cache. These caches assume one app process.
+  always bypass the cache. These caches are per process (see "Two app containers").
+
+### Two app containers
+
+Production runs `app` twice (`deploy.replicas: 2` in `docker-compose.prod.yml`),
+balanced by Traefik, so that one container failing its health check under load
+(2026-11-19: a crawler drawing share cards) leaves a server to route to. Deploy
+with `scripts/deploy-prod.sh`, which starts the new containers beside the old
+and stops the old once Traefik routes to the new; plain `up -d app` recreates
+both at once.
+
+Every in-process cache (`ReadCache`, the standings and map generations, the
+warm home reads) is per container: a write invalidates the cache of the
+container it went through, and the other serves its entry until the TTL
+(at most an hour, the map's headlines; most are a minute or less). Each was
+already correct for writers outside the process, and the other container is
+one more. Better Auth's sign-in limiter is in memory too, so per container.
+The API's rate limit is in Postgres and shared. Anything that must be exact
+across containers goes in Postgres, not in memory.

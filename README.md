@@ -43,7 +43,7 @@ by separate services over the admin API (`POST /listings`,
 
 TypeScript, Next.js 16 (App Router), Drizzle on Postgres 16, Better Auth,
 Tailwind v4, deck.gl for the map, Vitest + fast-check, Node 26. Production is
-one app container and one Postgres behind Traefik and Cloudflare.
+two app containers and one Postgres behind Traefik and Cloudflare.
 
 ## Layout
 
