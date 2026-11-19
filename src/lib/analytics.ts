@@ -28,6 +28,8 @@ export const ANALYTICS_PARAMS: ReadonlySet<string> = new Set([
   'resent',
   'step',
   'error',
+  // where a link of ours was posted (an announcement, a tweet): `?ref=announcement`
+  'ref',
 ]);
 
 /** `url` as analytics may record it; `origin` is this site's. Unparseable input becomes ''. */

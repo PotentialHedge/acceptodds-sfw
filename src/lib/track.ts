@@ -56,7 +56,10 @@ export type EventName =
   // a paper's reviews (`PaperReviews`): a review's text opened, a comment list opened or shown in full, by hand
   | 'review_opened'
   | 'review_comments_opened'
-  | 'review_comments_more';
+  | 'review_comments_more'
+  // the home page's announcements (`DismissAnnouncement`): a link in one followed, or one closed with its ×
+  | 'announcement_clicked'
+  | 'announcement_dismissed';
 
 export interface EventData {
   /** A refusal or failure: the error code, never its message. */
@@ -78,6 +81,8 @@ export interface EventData {
   target?: string;
   /** An example search's id (`lib/search-examples.ts`), never the query someone typed. */
   example?: string;
+  /** An announcement's id: the admin's message, about no one, like `example`. */
+  announcement?: string;
   /** A tutorial step, counted from 1. */
   step?: number;
 }
