@@ -4,7 +4,7 @@
  * parameters.
  *
  * Modelled on vvzapi.ch's: `key:value` filters, quoted values, `-` to negate a
- * word, phrase, filter or group, `OR` between terms, parentheses to group, and
+ * word, phrase, filter or group, `OR` (capitals only) between terms, parentheses to group, and
  * a plain AND between everything else.
  *
  *     graph neural author:hinton accept>=60 -status:settled
@@ -238,7 +238,8 @@ function tokenize(input: string): Token[] {
         out.push({ t: 'field', neg, key: head[1].toLowerCase(), op: head[2], value, raw: input.slice(start, i) });
       } else {
         const text = bare();
-        if (!neg && /^or$/i.test(text)) out.push({ t: 'or' });
+        // Only a capital `OR` is the operator: titles say "Seeing or Knowing".
+        if (!neg && text === 'OR') out.push({ t: 'or' });
         else if (text !== '') out.push({ t: 'word', neg, text });
       }
     }
@@ -256,13 +257,17 @@ const NUMBER = /^\d{1,12}(\.\d{1,6})?$/;
  * A websearch fragment. Quotes inside it are dropped (they would open a
  * phrase) — in a word without leaving a space, which could start a `-word`
  * the person never wrote — and one with no letter or digit is nothing:
- * websearch would read a lone `-` as an operator.
+ * websearch would read a lone `-` as an operator. So is a bare word `or`, in
+ * any case: websearch would read it as `OR`, and "Seeing or Knowing? Visual
+ * …" would find every paper about seeing. It is a stop word, so dropping it
+ * loses nothing.
  */
 function fragment(text: string, phrase: boolean): string | null {
   const clean = phrase
     ? text.replace(/["`]/g, ' ').replace(/\s+/g, ' ').trim()
     : text.replace(/["`]/g, '').replace(/^-+/, '');
   if (!/[\p{L}\p{N}]/u.test(clean)) return null;
+  if (!phrase && /^or$/i.test(clean)) return null;
   return phrase ? `"${clean}"` : clean;
 }
 

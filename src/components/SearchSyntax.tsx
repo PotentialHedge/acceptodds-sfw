@@ -15,7 +15,7 @@ export function SearchSyntax({ people = false }: { people?: boolean }) {
       <p>
         Words search titles, authors and abstracts; the last one may be half-typed. <code>&quot;a phrase&quot;</code>{' '}
         matches in order, <code>-word</code> excludes.{people && ' Words alone also find people.'} Terms are ANDed; use{' '}
-        <code>OR</code> and <code>( )</code> to group, and <code>-</code> before a filter or group to negate it.
+        <code>OR</code> (in capitals) and <code>( )</code> to group, and <code>-</code> before a filter or group to negate it.
       </p>
       <table className={ui.table}>
         <thead>

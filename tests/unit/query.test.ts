@@ -130,7 +130,14 @@ describe('parseSearch', () => {
         },
       ],
     });
-    expect(parseSearch('a or b').node).toEqual({ kind: 'or', items: [text(['a']), text(['b'])] });
+    expect(parseSearch('a OR b').node).toEqual({ kind: 'or', items: [text(['a']), text(['b'])] });
+  });
+
+  it('reads a lowercase "or" as a word, and drops it so websearch cannot read it as OR', () => {
+    expect(parseSearch('a or b').node).toEqual(text(['a', 'b']));
+    expect(parseSearch('Seeing Or Knowing? Visual').node).toEqual(text(['Seeing', 'Knowing?', 'Visual']));
+    expect(parseSearch('"seeing or knowing"').node).toEqual(text(['"seeing or knowing"']));
+    expect(parseSearch('oracle or').node).toEqual(text(['oracle']));
   });
 
   it('negates filters and groups, and a multi-word group is "not both"', () => {
