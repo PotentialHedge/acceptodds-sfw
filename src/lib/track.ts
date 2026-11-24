@@ -59,7 +59,9 @@ export type EventName =
   | 'review_comments_more'
   // the home page's announcements (`DismissAnnouncement`): a link in one followed, or one closed with its ×
   | 'announcement_clicked'
-  | 'announcement_dismissed';
+  | 'announcement_dismissed'
+  // the split test with PotentialPaper (`lib/split.ts`): a visitor who could have been sent there, and stayed
+  | 'split_stayed';
 
 export interface EventData {
   /** A refusal or failure: the error code, never its message. */

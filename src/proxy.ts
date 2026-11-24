@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { MARKET_API, MARKET_PAGES, REDIRECT_PAGES, under } from './lib/sfw';
+import { newBucket, parseBucket, SPLIT_COOKIE, SPLIT_HEADER } from './lib/split';
 
 /**
  * The safe for work edition's front door, before any route runs: the market
@@ -31,6 +32,22 @@ export function proxy(request: NextRequest) {
   }
   if (MARKET_PAGES.some((p) => under(pathname, p))) {
     return new NextResponse('Not found', { status: 404, headers: { 'content-type': 'text/plain' } });
+  }
+  // The split test (`lib/split.ts`): a paper's page gives a browser its bucket the first time, kept a year. The page
+  // reads it from the header on this request, since the cookie only comes back with the next.
+  if (under(pathname, '/papers') && parseBucket(request.cookies.get(SPLIT_COOKIE)?.value) === null) {
+    const bucket = String(newBucket());
+    const headers = new Headers(request.headers);
+    headers.set(SPLIT_HEADER, bucket);
+    const response = NextResponse.next({ request: { headers } });
+    response.cookies.set(SPLIT_COOKIE, bucket, {
+      path: '/',
+      maxAge: 365 * 24 * 3600,
+      sameSite: 'lax',
+      secure: request.nextUrl.protocol === 'https:',
+      httpOnly: true,
+    });
+    return response;
   }
   return NextResponse.next();
 }

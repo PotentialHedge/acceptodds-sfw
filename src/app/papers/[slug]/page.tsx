@@ -1,7 +1,10 @@
 import { readingGroupIdsForListing, readingStatuses } from '@/server/reading';
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { SplitControl } from '@/components/SplitControl';
+import { isBot, parseBucket, SPLIT_COOKIE, SPLIT_HEADER, splitShare } from '@/lib/split';
+import { potentialPaperPath, potentialPaperUrl } from '@/server/potentialpaper';
 import { Citations } from '@/components/Citations';
 import { RelatedPapers } from '@/components/RelatedPapers';
 import { AddToReadingList, ReadEye } from '@/components/ReadingList';
@@ -92,6 +95,10 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
     if (err instanceof ApiError && err.status === 404) notFound();
     throw err;
   }
+  const requestHeaders = await headers();
+  const viewer = await viewerFromHeaders(requestHeaders);
+  const split = await splitTarget(listing, requestHeaders, viewer !== null);
+  if (split.sendTo) redirect(split.sendTo);
   // The minimap itself is the browser's to fetch, once it scrolls into view: here only whether there is one.
   const [{ markets, followers }, citations, related, mapped, reviews] = await Promise.all([
     listingView(listing),
@@ -106,7 +113,6 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
   );
   const reviewFactors = await reviewFactorFields(listing.kind, factorMeans(reviews.filter((r) => r.kind === 'review')));
 
-  const viewer = await viewerFromHeaders(await headers());
   const following = viewer ? (await followedListingIds(viewer.account.id)).has(listing.id) : false;
   const [myReadingGroups, alreadyListed] = viewer
     ? await Promise.all([groupsOf(viewer.account.id), readingGroupIdsForListing(viewer.account.id, listing.id)])
@@ -136,6 +142,7 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
         dangerouslySetInnerHTML={{ __html: JSON.stringify(paperJsonLd(listing)).replace(/</g, '\\u003c') }}
       />
       {/* The paper's venue becomes the navbar's. */}
+      {split.stayed && <SplitControl />}
       {venueOf && <RememberVenue kind={venueOf} stale={venueOf !== (await currentVenue())} />}
       {listing.kind && (
         <RunningHead>
@@ -231,6 +238,30 @@ export default async function PaperPage({ params }: { params: Promise<{ slug: st
       </footer>
     </main>
   );
+}
+
+/**
+ * The split test (`lib/split.ts`): where this visitor is sent instead, if anywhere, and whether they are one who could
+ * have been and stayed (counted by `SplitControl`). Only a paper with an OpenReview id that PotentialPaper has.
+ */
+async function splitTarget(
+  listing: Listing,
+  requestHeaders: Headers,
+  signedIn: boolean,
+): Promise<{ sendTo: string | null; stayed: boolean }> {
+  const none = { sendTo: null, stayed: false };
+  const share = splitShare();
+  if (share === 0 || signedIn || isBot(requestHeaders.get('user-agent'))) return none;
+  const cookie = new RegExp(`(?:^|;\\s*)${SPLIT_COOKIE}=(\\d+)`).exec(requestHeaders.get('cookie') ?? '')?.[1];
+  const bucket = parseBucket(requestHeaders.get(SPLIT_HEADER)) ?? parseBucket(cookie);
+  if (bucket === null) return none;
+  const forum = listing.links.find((l) => l.url.includes('openreview.net/forum'))?.url;
+  const id = forum && new URL(forum).searchParams.get('id');
+  if (!id) return none;
+  // Asked in both halves, so each counts only papers PotentialPaper has.
+  const path = await potentialPaperPath(id);
+  if (!path) return none;
+  return bucket < share ? { sendTo: potentialPaperUrl(path), stayed: false } : { sendTo: null, stayed: true };
 }
 
 /** Where problem reports go. */
