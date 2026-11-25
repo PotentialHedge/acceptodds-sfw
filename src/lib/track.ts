@@ -98,7 +98,12 @@ export function track(name: EventName, data?: EventData, attempt = 0): void {
   if (typeof window === 'undefined') return;
   try {
     const umami = (window as unknown as { umami?: Umami }).umami;
-    if (umami) return umami.track(name, data as Record<string, unknown> | undefined);
+    // Umami's own return value (a promise) is dropped: a caller like `useEffect(() => track(...))` would hand it to
+    // React as the effect's cleanup, which React then calls, and the page fails as it is left.
+    if (umami) {
+      void umami.track(name, data as Record<string, unknown> | undefined);
+      return;
+    }
     // Analytics off or not loaded yet; give the script a few seconds.
     if (attempt < ATTEMPTS) setTimeout(() => track(name, data, attempt + 1), RETRY_MS);
   } catch {

@@ -8,6 +8,8 @@ import { track } from '@/lib/track';
  * ones sent arrive there with `?ref=acceptodds`; these are counted here, so the two halves can be compared.
  */
 export function SplitControl() {
-  useEffect(() => track('split_stayed'), []);
+  useEffect(() => {
+    track('split_stayed');
+  }, []);
   return null;
 }
