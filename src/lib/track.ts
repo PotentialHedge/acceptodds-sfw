@@ -74,6 +74,8 @@ export interface EventData {
   needsPassword?: boolean;
   following?: boolean;
   signedIn?: boolean;
+  /** `split_stayed` on the home page; one on a paper's page has none. */
+  page?: 'home';
   /**
    * what was copied: 'paper' | 'badge' | 'profile' | 'review_link'; or where it was sent: 'x' | 'whatsapp'; or where the
    * tutorial's last button went: 'welcome' | 'close'; or where a sign-up started: 'bet' | 'open_market' |

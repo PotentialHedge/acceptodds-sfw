@@ -1,7 +1,8 @@
 /**
  * The split test with PotentialPaper (potentialpaper.com), a page for every paper with the same ICLR 2027
  * submissions: a share of visitors who land on a paper's page here are sent to that paper's page there instead, to
- * compare how each site keeps a reader. Shared by `proxy.ts`, so relative imports only.
+ * compare how each site keeps a reader. The same share who open the home page on ICLR 2027 (browsing, or a search in
+ * plain words) are sent to PotentialPaper's home page or search. Shared by `proxy.ts`, so relative imports only.
  *
  * Each browser gets a bucket, 0–99, once (`SPLIT_COOKIE`, a year), and keeps it: those below the share
  * (`POTENTIALPAPER_SHARE`, a percentage, 0 when unset) are sent, the rest stay, so raising the share keeps everyone

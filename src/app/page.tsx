@@ -2,6 +2,10 @@ import type { Metadata } from 'next';
 import type { ComponentProps } from 'react';
 import Link from 'next/link';
 import { cookies, headers } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { SplitControl } from '@/components/SplitControl';
+import { isBot, parseBucket, SPLIT_COOKIE, SPLIT_HEADER, splitShare } from '@/lib/split';
+import { potentialPaperHomeUrl, POTENTIALPAPER_VENUE } from '@/server/potentialpaper';
 import { Collapsible } from '@/components/Collapsible';
 import { FilterIcon, MoreIcon } from '@/components/icons';
 import { Pager } from '@/components/Pager';
@@ -184,7 +188,15 @@ export default async function Home({
   const fromExample = exampleOf(q);
   const kindFilter = parsed?.fields.has('venue') ? null : kind;
   const statusFilter: Status = status;
-  const viewer = await viewerFromHeaders(await headers());
+  const requestHeaders = await headers();
+  const viewer = await viewerFromHeaders(requestHeaders);
+  const split = homeSplitTarget(requestHeaders, viewer !== null, {
+    kind,
+    q,
+    plain: !parsed || (parsed.fields.size === 0 && parsed.errors.length === 0),
+    following: one(sp.following) === '1',
+  });
+  if (split.sendTo) redirect(split.sendTo);
   const me = viewer?.account.id ?? null;
   // `recommended` once the viewer has done enough for it to mean something (`server/recommendations.ts`).
   const recommends = me !== null && (await canRecommend(me));
@@ -287,6 +299,7 @@ export default async function Home({
 
   return (
     <main className={ui.page}>
+      {split.stayed && <SplitControl page="home" />}
       {/* A venue named in the URL (a link from elsewhere) becomes the navbar's, and the one `/welcome` searches first. */}
       {wanted && kinds.some((k) => k.kind === wanted) && <RememberVenue kind={wanted} stale={wanted !== navVenue} />}
       {/* A venue taken from the cookie is written into the address bar, so sharing it shares the venue. */}
@@ -577,4 +590,24 @@ function rowKey(r: BrowseRow): string {
  */
 function SortLink({ pinned, ...props }: ComponentProps<typeof Link> & { pinned: boolean }) {
   return pinned ? <ScrollingLink to="all" at={0.25} {...props} /> : <Link {...props} />;
+}
+
+/**
+ * The split test (`lib/split.ts`) on the home page: where this visitor is sent instead, if anywhere, and whether they
+ * are one who could have been and stayed (counted by `SplitControl`). Only the venue PotentialPaper lists, browsed or
+ * searched in plain words (it has no search syntax); never a list of followed papers, which is an account's.
+ */
+function homeSplitTarget(
+  requestHeaders: Headers,
+  signedIn: boolean,
+  view: { kind: string | null; q: string | null; plain: boolean; following: boolean },
+): { sendTo: string | null; stayed: boolean } {
+  const none = { sendTo: null, stayed: false };
+  const share = splitShare();
+  if (share === 0 || signedIn || isBot(requestHeaders.get('user-agent'))) return none;
+  if (view.kind !== POTENTIALPAPER_VENUE || !view.plain || view.following) return none;
+  const cookie = new RegExp(`(?:^|;\\s*)${SPLIT_COOKIE}=(\\d+)`).exec(requestHeaders.get('cookie') ?? '')?.[1];
+  const bucket = parseBucket(requestHeaders.get(SPLIT_HEADER)) ?? parseBucket(cookie);
+  if (bucket === null) return none;
+  return bucket < share ? { sendTo: potentialPaperHomeUrl(view.q), stayed: false } : { sendTo: null, stayed: true };
 }

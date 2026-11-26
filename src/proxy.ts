@@ -33,9 +33,12 @@ export function proxy(request: NextRequest) {
   if (MARKET_PAGES.some((p) => under(pathname, p))) {
     return new NextResponse('Not found', { status: 404, headers: { 'content-type': 'text/plain' } });
   }
-  // The split test (`lib/split.ts`): a paper's page gives a browser its bucket the first time, kept a year. The page
-  // reads it from the header on this request, since the cookie only comes back with the next.
-  if (under(pathname, '/papers') && parseBucket(request.cookies.get(SPLIT_COOKIE)?.value) === null) {
+  // The split test (`lib/split.ts`): a paper's page or the home page gives a browser its bucket the first time, kept a
+  // year. The page reads it from the header on this request, since the cookie only comes back with the next.
+  if (
+    (pathname === '/' || under(pathname, '/papers')) &&
+    parseBucket(request.cookies.get(SPLIT_COOKIE)?.value) === null
+  ) {
     const bucket = String(newBucket());
     const headers = new Headers(request.headers);
     headers.set(SPLIT_HEADER, bucket);

@@ -7,9 +7,9 @@ import { track } from '@/lib/track';
  * The split test's other half (`lib/split.ts`): a visitor who could have been sent to PotentialPaper and stayed. The
  * ones sent arrive there with `?ref=acceptodds`; these are counted here, so the two halves can be compared.
  */
-export function SplitControl() {
+export function SplitControl({ page }: { page?: 'home' }) {
   useEffect(() => {
-    track('split_stayed');
-  }, []);
+    track('split_stayed', page ? { page } : undefined);
+  }, [page]);
   return null;
 }

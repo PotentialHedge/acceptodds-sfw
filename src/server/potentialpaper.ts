@@ -55,3 +55,12 @@ export async function potentialPaperPath(openreviewId: string): Promise<string |
 export function potentialPaperUrl(path: string): string {
   return `${SITE}${path}?ref=acceptodds`;
 }
+
+/** The venue PotentialPaper lists, the only one whose home page is sent there. */
+export const POTENTIALPAPER_VENUE = 'ICLR 2027';
+
+/** Its home page, or its search for `q` (plain words: it has no search syntax), marked as coming from here. */
+export function potentialPaperHomeUrl(q: string | null): string {
+  const params = new URLSearchParams(q ? { q, ref: 'acceptodds' } : { ref: 'acceptodds' });
+  return `${SITE}/?${params}`;
+}
